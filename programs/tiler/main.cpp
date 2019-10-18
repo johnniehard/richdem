@@ -84,6 +84,7 @@ template <class T> void SaveTiles(TileGrid &tiles) {
   const int gridwidth = tiles.front().size();
 
   cout << endl;
+  auto firstTile = tiles[0][0];
   for (int y = 0; y < gridheight; y++) {
     for (int x = 0; x < gridwidth; x++) {
       if (tiles[y][x].nullTile)
@@ -96,7 +97,14 @@ template <class T> void SaveTiles(TileGrid &tiles) {
       auto data = Array2D<T>(tile.filename, false, tile.x, tile.y, tile.width,
                              tile.height);
 
-      data.saveGDAL(tile.outputname, tile.analysis, tile.x, tile.y);
+      auto newData = Array2D<T>(firstTile.width, firstTile.height, data.noData());
+      for (int y0 = 0; y0 < data.height(); y0++) {
+        for (int x0 = 0; x0 < data.width(); x0++) {
+          newData(x0, y0) = data(x0, y0);
+        }
+      }
+
+      newData.saveGDAL(tile.outputname, tile.analysis, tile.x, tile.y);
     }
   }
 
