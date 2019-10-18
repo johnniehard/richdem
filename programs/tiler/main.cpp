@@ -97,7 +97,8 @@ template <class T> void SaveTiles(TileGrid &tiles) {
       auto data = Array2D<T>(tile.filename, false, tile.x, tile.y, tile.width,
                              tile.height);
 
-      auto newData = Array2D<T>(firstTile.width, firstTile.height, data.noData());
+      auto newData = data;
+      newData.resize(firstTile.width, firstTile.height, data.noData());
       for (int y0 = 0; y0 < data.height(); y0++) {
         for (int x0 = 0; x0 < data.width(); x0++) {
           newData(x0, y0) = data(x0, y0);
