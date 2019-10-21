@@ -516,7 +516,8 @@ class A2Array2D {
         temp.replace(temp.find("%f"),2,tile.basename);
         lfout.addEntry(temp);
 
-        tile.saveGDAL(temp, 0, 0);
+        std::string meta = ""; // saveGDAL expects a string as second argument
+        tile.saveGDAL(temp, meta, 0, 0);
       }
     }
 
