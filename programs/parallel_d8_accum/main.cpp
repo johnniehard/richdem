@@ -470,6 +470,33 @@ class ConsumerSpecifics {
     timer_io.start();
     flowdirs = Array2D<flowdir_t>(tile.filename, false, tile.x, tile.y, tile.width, tile.height);
 
+    // In case the flow direction raster does not use the same direction encoding as richdem tools
+    // vector<int> dir2dir = {
+    //   0,
+    //   4,
+    //   5,
+    //   6,
+    //   7,
+    //   8,
+    //   1,
+    //   2,
+    //   3
+    // };
+    // for (int y = 0; y < flowdirs.height(); y++) {
+    //       for (int x = 0; x < flowdirs.width(); x++) {
+    //         // cout << (int)flowdirs(x, y) << " ";
+    //         int v = (int)flowdirs(x, y);
+    //         int v2 = 0;
+    //         for (int i= 0; i < 8; i++) {
+    //           if (((v >> i) & 1) != 0) {
+    //             v2 = i+1;
+    //           }
+    //         }
+    //         flowdirs(x, y) = dir2dir[v2];
+    //       }
+    //       // cout << endl;
+    //     }
+
     //TODO: Figure out a clever way to allow tiles of different widths/heights
     if(flowdirs.width()!=tile.width){
       std::cerr<<"E Tile '"<<tile.filename<<"' had unexpected width. Found "<<flowdirs.width()<<" expected "<<tile.width<<std::endl;
