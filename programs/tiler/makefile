@@ -10,7 +10,7 @@ export DEBUG_FLAGS=-g
 #-DNDEBUG -DSHOW_STAMPS
 
 compile: main.cpp
-	$(CXX) $(OPT_FLAGS) $(CXXFLAGS) -o tiler main.cpp $(GDAL_LIBS)
+	$(CXX) $(OPT_FLAGS) $(CXXFLAGS) -o tiler.exe main.cpp $(GDAL_LIBS)
 
 debug: main.cpp
-	$(CXX) $(DEBUG_FLAGS) $(CXXFLAGS) -o tiler main.cpp $(GDAL_LIBS)
+	$(CXX) $(DEBUG_FLAGS) $(CXXFLAGS) -o tiler.exe main.cpp $(GDAL_LIBS)
