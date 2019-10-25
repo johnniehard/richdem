@@ -84,8 +84,8 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   mkdir("tmp/visited", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   mkdir("tmp/pits", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   mkdir("tmp/out", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  dem.cow("tmp/out/");
 
-  dem.cow("out/");
   A2Array2D<uint32_t> backlinks("tmp/backlinks/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
   backlinks.setAll(NO_BACK_LINK);
 
