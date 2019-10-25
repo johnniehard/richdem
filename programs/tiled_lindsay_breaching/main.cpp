@@ -68,7 +68,7 @@ enum LindsayCellType { UNVISITED, VISITED, EDGE };
 */
 template <class elev_t>
 void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
-                 bool fill_depressions, uint32_t maxpathlen, elev_t maxdepth) {
+                 bool fill_depressions, uint32_t maxpathlen, elev_t maxdepth, int cache_size) {
   cerr << "Starting" << endl;
   RDLOG_ALG_NAME << "Lindsay2016: Breach/Fill Depressions (EXPERIMENTAL!)";
   RDLOG_CITATION
@@ -86,13 +86,13 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   mkdir("tmp/out", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
   dem.cow("out/");
-  A2Array2D<uint32_t> backlinks("tmp/backlinks/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), 128);
+  A2Array2D<uint32_t> backlinks("tmp/backlinks/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
   backlinks.setAll(NO_BACK_LINK);
 
-  A2Array2D<uint8_t> visited("tmp/visited/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), 128);
+  A2Array2D<uint8_t> visited("tmp/visited/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
   visited.setAll(false);
 
-  A2Array2D<uint8_t> pits("tmp/pits/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), 128);
+  A2Array2D<uint8_t> pits("tmp/pits/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
   pits.setAll(false);
 
   backlinks.copy_metadata_from(dem);
@@ -116,12 +116,13 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   for (int y = 0; y < dem.height(); y++) {
     cout << "\r " << 100*(float)y/dem.height();
     for (int x = 0; x < dem.width(); x++) {
+      auto& elevation = dem(x, y);
 
       if (dem.isNoData(x, y)) // Don't evaluate NoData cells
         continue;
 
       if (dem.isEdgeCell(x, y)) { // Valid edge cells go on priority-queue
-        pq.emplace(x, y, dem(x, y));
+        pq.emplace(x, y, elevation);
         visited(x, y) = LindsayCellType::EDGE;
         continue;
       }
@@ -138,7 +139,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
         // Cells which can drain into NoData go on priority-queue as edge cells
         if (dem.isNoData(nx, ny)) {
-          pq.emplace(x, y, dem(x, y));
+          pq.emplace(x, y, elevation);
           visited(x, y) = LindsayCellType::EDGE;
           goto nextcell; // VELOCIRAPTOR
         }
@@ -150,17 +151,17 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
       // This is a pit cell if it is lower than any of its neighbours. In this
       // case: raise the cell to be just lower than its lowest neighbour. This
       // makes the breaching/tunneling procedures work better.
-      if (dem(x, y) < lowest_neighbour) {
+      if (elevation < lowest_neighbour) {
         if (eps_gradients)
-          dem(x, y) = std::nextafter(lowest_neighbour,
+          elevation = std::nextafter(lowest_neighbour,
                                      std::numeric_limits<elev_t>::lowest());
         else
-          dem(x, y) = lowest_neighbour;
+          elevation = lowest_neighbour;
       }
 
       // Since depressions might have flat bottoms, we treat flats as pits. Mark
       // flat/pits as such now.
-      if (dem(x, y) <= lowest_neighbour) {
+      if (elevation <= lowest_neighbour) {
         pits(x, y) = true;
         total_pits++; // TODO: May not need this
       }
@@ -177,7 +178,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   int done = 0;
   while (!pq.empty()) {
     done++;
-    cout << "\r" << done << "/" << total;
+    if ((done % 1000) == 0) cout << "\r" << done << "/" << total;
 
     const auto c = pq.top();
     pq.pop();
@@ -275,10 +276,10 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
       if (visited(nx, ny) != LindsayCellType::UNVISITED)
         continue;
 
-      const auto my_e = dem(nx, ny);
+      const auto elevation = dem(nx, ny);
 
       // The neighbour is unvisited. Add it to the queue
-      pq.emplace(nx, ny, my_e);
+      pq.emplace(nx, ny, elevation);
       //if (fill_depressions)
       //  flood_array.emplace_back(dem.xyToI(nx, ny));
       visited(nx, ny) = LindsayCellType::VISITED;
@@ -317,7 +318,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
 int main(int argc, char** argv) {
   if (argc != 3) {
-    cerr << "Usage: ./a.out layoutfile outpath" << endl;
+    cerr << "Usage: ./breaching layoutfile outpath" << endl;
     cerr << "outpath must include a %f" << endl;
     return 1;
   }
@@ -325,11 +326,13 @@ int main(int argc, char** argv) {
   assert(string(argv[2]).find_last_of("/") != string::npos);
   assert(string(argv[2]).find("%f") != string::npos);
 
-  A2Array2D<double> dem(argv[1], 128);
+  int cache_size = 256;
+  A2Array2D<double> dem(argv[1], cache_size);
 
-  Lindsay2016(dem, LindsayMode::COMPLETE_BREACHING, true, true, std::numeric_limits<uint32_t>::max(), std::numeric_limits<double>::max());
+  Lindsay2016(dem, LindsayMode::COMPLETE_BREACHING, true, true, std::numeric_limits<uint32_t>::max(), std::numeric_limits<double>::max(), cache_size);
   auto foldername = string(argv[2]).substr(0, string(argv[2]).find_last_of("/")).c_str();
   mkdir(foldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  cout << "Saving final output" << endl;
   dem.saveGDAL(argv[2]);
 }
 
