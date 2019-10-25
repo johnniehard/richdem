@@ -74,6 +74,8 @@ class A2Array2D {
     bool null_tile         = false;
     bool loaded            = false;
     bool created           = true;
+    bool cow               = false;
+    std::string cow_filename;
     bool do_set_all        = false; //If true, then set all to 'set_all_val' when tile is loaded
     int create_with_width  = -1;
     int create_with_height = -1;
@@ -81,11 +83,12 @@ class A2Array2D {
     void lazySetAll(){
       if(do_set_all){
         do_set_all = false;
-        setAll(set_all_val);
+        this->setAll(set_all_val);
       }
     }
   };
   std::vector< std::vector< WrappedArray2D > > data;
+  std::string cow_prefix;
 
   LRU< WrappedArray2D* > lru;
 
@@ -113,17 +116,7 @@ class A2Array2D {
     }
 
     if(lru.full()){
-      auto tile_to_unload = lru.back();
-
-      if(readonly)
-        tile_to_unload->clear();
-      else
-        tile_to_unload->dumpData();
-
-      evictions++;
-
-      tile_to_unload->loaded = false;
-      lru.pop_back();
+      pop_from_lru();
     }
 
     if(tile.created){
@@ -150,6 +143,52 @@ class A2Array2D {
   }
 
  public:
+  template<class U>
+  void copy_metadata_from(A2Array2D<U>& other) {
+    assert(widthInTiles() == other.widthInTiles());
+    assert(heightInTiles() == other.heightInTiles());
+    for(int32_t ty=0;ty<heightInTiles();ty++) {
+      for(int32_t tx=0;tx<widthInTiles();tx++) {
+        data[ty][tx].geotransform = other.data[ty][tx].geotransform;
+        data[ty][tx].projection = other.data[ty][tx].projection;
+        data[ty][tx].metadata = other.data[ty][tx].metadata;
+      }
+    }
+  }
+
+  void pop_from_lru() {
+    auto tile_to_unload = lru.back();
+
+    if(readonly)
+      tile_to_unload->clear();
+    else {
+      if (tile_to_unload->cow) {
+        tile_to_unload->setCacheFilename(tile_to_unload->cow_filename);
+        tile_to_unload->cow = false;
+      }
+      tile_to_unload->dumpData();
+    }
+
+    evictions++;
+
+    tile_to_unload->loaded = false;
+    lru.pop_back();
+  }
+
+  void save_all_tiles() {
+    while(lru.size() > 0) pop_from_lru();
+  }
+
+  void cow(std::string prefix) {
+    readonly = false;
+    cow_prefix = prefix;
+    for(int32_t ty=0;ty<heightInTiles();ty++) {
+      for(int32_t tx=0;tx<widthInTiles();tx++){
+        data[ty][tx].cow = true;
+        data[ty][tx].cow_filename = cow_prefix+std::to_string(tx)+"_" + std::to_string(ty) + ".native";
+      }
+    }
+  }
 
   A2Array2D(std::string layoutfile, int cachesize){
     lru.setCapacity(cachesize);
@@ -233,6 +272,9 @@ class A2Array2D {
     this->total_width_in_cells  = per_tile_width*width;
     this->total_height_in_cells = per_tile_height*height;
 
+    flipV                 = false;
+    flipH                 = false;
+
     int tile=0;
     for(int y=0;y<height;y++){
       data.emplace_back();
@@ -243,6 +285,10 @@ class A2Array2D {
         data.back().back().created  = false;
       }
     }
+
+    quick_width_in_tiles  = width;
+    quick_height_in_tiles = height;
+    null_tile_quick.resize(quick_width_in_tiles*quick_height_in_tiles, false);
   }
 
   template<class U>
@@ -365,6 +411,20 @@ class A2Array2D {
     _LoadTile(tile_x, tile_y);
 
     return data[tile_y][tile_x](x,y);
+  }
+
+  T& operator()(int64_t i) {
+    int y = i / total_width_in_cells;
+    int x = i % total_width_in_cells;
+    return (*this)(x, y);
+  }
+
+  int64_t xyToI(int32_t x, int32_t y) {
+    return (int64_t)y * total_width_in_cells + (int64_t)x;
+  }
+
+  bool inGrid(int32_t x, int32_t y) {
+    return in_grid(x, y);
   }
 
   void makeQuadIndex(int32_t x, int32_t y, int32_t &tx, int32_t &ty, int32_t &px, int32_t &py) const {

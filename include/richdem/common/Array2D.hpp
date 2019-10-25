@@ -205,6 +205,7 @@ class Array2D {
   */
   //TODO: Should save metadata
   void saveToCache(const std::string &filename){
+    std::cout << "Saving to " << filename << std::endl;
     std::fstream fout;
 
     from_cache     = true;
@@ -235,6 +236,7 @@ class Array2D {
     out.write(reinterpret_cast<const char*>(projection.data()), projection.size()*sizeof(const char));
 
     out.write(reinterpret_cast<const char*>(data.data()), size()*sizeof(T));
+    out.close();
   }
 
   ///TODO
