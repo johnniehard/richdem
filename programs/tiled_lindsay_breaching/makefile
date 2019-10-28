@@ -10,7 +10,7 @@ export DEBUG_FLAGS=-g -O0 -fno-omit-frame-pointer -DGLIBCXX_DEBUG
 #-DNDEBUG -DSHOW_STAMPS
 
 compile: main.cpp
-	$(CXX) $(OPT_FLAGS) $(CXXFLAGS) -o breaching main.cpp $(GDAL_LIBS)
+	$(CXX) $(OPT_FLAGS) $(CXXFLAGS) -o breaching.exe main.cpp $(GDAL_LIBS)
 
 debug: main.cpp
-	$(CXX) $(DEBUG_FLAGS) $(CXXFLAGS) -o breaching main.cpp $(GDAL_LIBS)
+	$(CXX) $(DEBUG_FLAGS) $(CXXFLAGS) -o breaching.exe main.cpp $(GDAL_LIBS)
