@@ -114,7 +114,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   cerr << "Identifying pits and edge cells..." << endl;
   
   for (int y = 0; y < dem.height(); y++) {
-    cout << "\r " << 100*(float)y/dem.height();
+    cout << "\r" << (int)(100*(float)(y+1)/dem.height()) << "%" << flush;
     for (int x = 0; x < dem.width(); x++) {
       auto& elevation = dem(x, y);
 
@@ -178,7 +178,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   int done = 0;
   while (!pq.empty()) {
     done++;
-    if ((done % 1000) == 0) cout << "\r" << done << "/" << total;
+    if ((done % 1000) == 0) cout << "\r" << (int)(100*done/(float)total) << "%" << flush;
 
     const auto c = pq.top();
     pq.pop();
