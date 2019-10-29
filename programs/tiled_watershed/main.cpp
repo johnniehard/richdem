@@ -19,18 +19,12 @@ namespace richdem {
 
 #define PI 3.14159265
 
+// Rotate int unit vector by rad radians, i.e. +90deg, -90deg, 180deg
 std::vector<int> turn(std::vector<int> v, float rad){
     float x = cos(rad) * (float)v[0] - sin(rad) * (float)v[1];
     float y = sin(rad) * (float)v[0] + cos(rad) * (float)v[1];
 
     return std::vector<int>{(int)x, (int)y};
-}
-
-const int n_min = 1;
-const int n_max = 8;
-
-int wrapNeighbour(int a){
-  return ((a - n_min) % (n_max - n_min) ) + n_min;
 }
 
 // Moore neighbourhood boundary tracing
@@ -42,7 +36,7 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y){
   // add starting point to list
   boundary_cells.push_back(vector<int> {x, y});
 
-  // set current cell to x, y
+  // set starting point as current cell
   vector<int> start_cell = {x, y};
   vector<int> cell = start_cell;
 
@@ -59,40 +53,35 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y){
 
   int count = 0;
   while(true){
-    if(cell == start_cell && count > 0 && dir == start_dir){
+    // Stopping criteria, stop when reaching start cell for second time
+    if(cell == start_cell && count > 0){
       break;
     }
     count++;
 
-    int cx = cell[0];
-    int cy = cell[1];
-
+    // Backtrack
     if(count > 0){
       dir = turn(dir, -PI);
     }
 
     for (int i = 1; i <= 8; i++) {
 
+      // Turn if on a diagonal or if just backtracked
       if(n_diag[i] || i == 1){
         dir = turn(dir, -(PI / 2));
       }
 
-      const int nx = cx - dir[0];
-      const int ny = cy - dir[1];
+      const int nx = cell[0] - dir[0];
+      const int ny = cell[1] - dir[1];
 
-
+      // Check if we've found a value
+      // If so set neighbour to active cell and add cell to list of boundary cells
       if(watershed(nx, ny)){
-        // cout << "found value" << endl;
         cell[0] = nx;
         cell[1] = ny;
         boundary_cells.push_back(cell);
         break;
       }
-    }
-
-    // escape hatch
-    if(count > 10000){
-      break;
     }
 
   }
@@ -101,7 +90,6 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y){
   for(size_t i=0; i < boundary_cells.size(); i++){
     std::cout << boundary_cells[i][0] << ", " << boundary_cells[i][1] << std::endl;
   }
-
 }
 
 template <class elev_t>
