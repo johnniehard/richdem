@@ -98,24 +98,24 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y){
 
 template <class elev_t>
 void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, int y, int cache_size) {
-  cerr << "Starting" << endl;
+  // cerr << "Starting" << endl;
   
   // Create temporary folder
   mkdir("tmp", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
   // Watershed
   mkdir("tmp/watershed", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-  A2Array2D<uint32_t> watershed("tmp/watershed/", flowdir.stdTileWidth(), flowdir.stdTileHeight(), flowdir.widthInTiles(), flowdir.heightInTiles(), cache_size);
-  watershed.setAll((int)0);
+  A2Array2D<bool> watershed("tmp/watershed/", flowdir.stdTileWidth(), flowdir.stdTileHeight(), flowdir.widthInTiles(), flowdir.heightInTiles(), cache_size);
+  watershed.setAll(false);
 
   // Visited
   mkdir("tmp/visited", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-  A2Array2D<uint32_t> visited("tmp/visited/", flowdir.stdTileWidth(), flowdir.stdTileHeight(), flowdir.widthInTiles(), flowdir.heightInTiles(), cache_size);
+  A2Array2D<bool> visited("tmp/visited/", flowdir.stdTileWidth(), flowdir.stdTileHeight(), flowdir.widthInTiles(), flowdir.heightInTiles(), cache_size);
   visited.setAll(false);
 
   // Start timer
-  Timer overall;
-  overall.start();
+  // Timer overall;
+  // overall.start();
 
   // queue
   std::queue<std::vector<int>> q;
@@ -126,7 +126,7 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
 
   auto flowacc_val = flowacc(x, y);
 
-  cout << "flowacc value at " << x << "," << y << ": " << flowacc_val << endl;
+  // cout << "flowacc value at " << x << "," << y << ": " << flowacc_val << endl;
 
   // add cell to queue
   q.push(coords);
@@ -145,7 +145,7 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
 
     auto value = flowdir(x, y);
 
-    watershed(x, y) = 1;
+    watershed(x, y) = true;
     visited(x, y) = true;
 
     // look at cells neighbours
@@ -178,10 +178,10 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
 
   assert(cells == flowacc_val);
 
-  cout << endl;
-
   // Print final time
-  cerr << "Wall-time = " << overall.stop() << endl;
+
+  traceContour(watershed, x, y);
+  // cerr << "Wall-time = " << overall.stop() << endl;
 }
 
 } // namespace richdem
