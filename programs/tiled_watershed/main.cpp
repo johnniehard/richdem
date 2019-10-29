@@ -10,11 +10,91 @@
 #include <limits>
 #include <sys/stat.h>
 #include <iostream>
+#include <vector>
 
 using namespace std;
 using namespace richdem;
 
 namespace richdem {
+
+#define PI 3.14159265
+
+std::vector<int> turn(std::vector<int> v, float rad){
+    float x = cos(rad) * (float)v[0] - sin(rad) * (float)v[1];
+    float y = sin(rad) * (float)v[0] + cos(rad) * (float)v[1];
+
+    return std::vector<int>{(int)x, (int)y};
+}
+
+const int n_min = 1;
+const int n_max = 8;
+
+int wrapNeighbour(int a){
+  return ((a - n_min) % (n_max - n_min) ) + n_min;
+}
+
+// Moore neighbourhood boundary tracing
+void traceContour(A2Array2D<bool> &watershed, int x, int y){
+
+  // define list of points
+  vector<vector<int>> boundary_cells;
+
+  // add starting point to list
+  boundary_cells.push_back(vector<int> {x, y});
+
+  // set current cell to x, y
+  vector<int> start_cell = {x, y};
+  vector<int> cell = start_cell;
+
+  vector<int> start_dir = {0, -1};
+  vector<int> dir = start_dir;
+
+  int count = 0;
+  while(true){
+    if(cell == start_cell && count > 0 && dir == start_dir){
+      break;
+    }
+    count++;
+
+    int cx = cell[0];
+    int cy = cell[1];
+
+    if(count > 0){
+      dir = turn(dir, -PI);
+    }
+
+    for (int i = 1; i <= 8; i++) {
+
+      if(n_diag[i] || i == 1){
+        dir = turn(dir, -(PI / 2));
+      }
+
+      const int nx = cx - dir[0];
+      const int ny = cy - dir[1];
+
+
+      if(watershed(nx, ny)){
+        // cout << "found value" << endl;
+        cell[0] = nx;
+        cell[1] = ny;
+        boundary_cells.push_back(cell);
+        break;
+      }
+    }
+
+    // escape hatch
+    if(count > 10000){
+      break;
+    }
+
+  }
+
+  std::cout << "x, y" << std::endl;
+  for(size_t i=0; i < boundary_cells.size(); i++){
+    std::cout << boundary_cells[i][0] << ", " << boundary_cells[i][1] << std::endl;
+  }
+
+}
 
 template <class elev_t>
 void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, int y, int cache_size) {
