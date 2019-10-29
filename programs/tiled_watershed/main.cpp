@@ -46,7 +46,15 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y){
   vector<int> start_cell = {x, y};
   vector<int> cell = start_cell;
 
-  vector<int> start_dir = {0, -1};
+  vector<int> start_dir;
+  // check all neighbours to find empty cell, start towards that cell
+  for(int i = 1; i <= 8; i+=2){
+    const int nx = x + dx[i];
+    const int ny = y + dy[i];
+    if(!watershed(nx, ny)){
+      start_dir = {dx[i], dy[i]};
+    }
+  }
   vector<int> dir = start_dir;
 
   int count = 0;
