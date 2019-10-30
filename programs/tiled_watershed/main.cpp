@@ -102,14 +102,12 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y, vector<double> trans
 template <class elev_t>
 void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, int y, int cache_size) {
  
-  // Create temporary folder
+  // Create temporary folders and datasets
   mkdir("tmp", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-
   // Watershed
   mkdir("tmp/watershed", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   A2Array2D<bool> watershed("tmp/watershed/", flowdir.stdTileWidth(), flowdir.stdTileHeight(), flowdir.widthInTiles(), flowdir.heightInTiles(), cache_size);
   watershed.setAll(false);
-
   // Visited
   mkdir("tmp/visited", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   A2Array2D<bool> visited("tmp/visited/", flowdir.stdTileWidth(), flowdir.stdTileHeight(), flowdir.widthInTiles(), flowdir.heightInTiles(), cache_size);
@@ -161,9 +159,7 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
       // check if neighbour flows in to cell
       // if so mark it as part of the watershed and add neighbour to queue
       if(n_value == d8_inverse[n]){
-          std::vector<int> coords(2);
-          coords[0] = nx;
-          coords[1] = ny;
+          std::vector<int> coords = {nx, ny};
           q.push(coords);
       }
     }
