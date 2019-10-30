@@ -200,10 +200,15 @@ int main(int argc, char** argv) {
   A2Array2D<double> flowdir(argv[1], cache_size);
   A2Array2D<double> flowacc(argv[2], cache_size);
 
-  int x = stoi(argv[3]);
-  int y = stoi(argv[4]);
+  double geo_x = stod(argv[3]);
+  double geo_y = stod(argv[4]);
 
-  Watershed(flowdir, flowacc, x, y, cache_size);
+  // https://gdal.org/api/gdaldataset_cpp.html#_CPPv4N11GDALDataset15GetGeoTransformEPd
+  vector<double> transform = flowacc.getGeotransform();
+  double raster_x = (1 / (transform[1]*transform[5]-transform[2]*transform[4])) * ( transform[5] * (geo_x - transform[0]) - transform[2] * (geo_y - transform[3]));
+  double raster_y = (1 / (transform[1]*transform[5]-transform[2]*transform[4])) * ( transform[1] * (geo_y - transform[3]) - transform[4] * (geo_x - transform[0]));
+
+  Watershed(flowdir, flowacc, raster_x, raster_y, cache_size);
 }
 
 #endif
