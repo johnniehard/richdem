@@ -61,14 +61,14 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y){
 
     // Backtrack
     if(count > 0){
-      dir = turn(dir, -PI);
+      dir = turn(dir, PI);
     }
 
     for (int i = 1; i <= 8; i++) {
 
       // Turn if on a diagonal or if just backtracked
       if(n_diag[i] || i == 1){
-        dir = turn(dir, -(PI / 2));
+        dir = turn(dir, PI / 2);
       }
 
       const int nx = cell[0] - dir[0];
@@ -197,6 +197,14 @@ int main(int argc, char** argv) {
   int y = stoi(argv[4]);
 
   // 736 440
+
+
+  vector<double> t = flowacc.getGeotransform();
+
+  float sx = t[0] + x * t[1] + y * t[2];
+  float sy = t[3] + x * t[4] + y * t[5];
+
+  cout << sx << ", " << sy << endl;
 
   Watershed(flowdir, flowacc, x, y, cache_size);
 }
