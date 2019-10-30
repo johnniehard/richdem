@@ -28,7 +28,7 @@ std::vector<int> turn(std::vector<int> v, float rad){
 }
 
 // Moore neighbourhood boundary tracing
-void traceContour(A2Array2D<bool> &watershed, int x, int y){
+void traceContour(A2Array2D<bool> &watershed, int x, int y, vector<double> transform){
 
   // define list of points
   vector<vector<int>> boundary_cells;
@@ -85,10 +85,17 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y){
     }
 
   }
-
-  std::cout << "x, y" << std::endl;
+ 
+  cout << "x, y" << endl;
   for(size_t i=0; i < boundary_cells.size(); i++){
-    std::cout << boundary_cells[i][0] << ", " << boundary_cells[i][1] << std::endl;
+
+    int raster_x = boundary_cells[i][0];
+    int raster_y = boundary_cells[i][1];
+
+    float geo_x = transform[0] + raster_x * transform[1] + raster_y * transform[2];
+    float geo_y = transform[3] + raster_x * transform[4] + raster_y * transform[5];
+
+    cout << fixed << setprecision(1) << geo_x << ", " << geo_y << endl;
   }
 }
 
@@ -176,7 +183,7 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
 
   // Print final time
 
-  traceContour(watershed, x, y);
+  traceContour(watershed, x, y, flowacc.getGeotransform());
   // cerr << "Wall-time = " << overall.stop() << endl;
 }
 
@@ -195,16 +202,6 @@ int main(int argc, char** argv) {
 
   int x = stoi(argv[3]);
   int y = stoi(argv[4]);
-
-  // 736 440
-
-
-  vector<double> t = flowacc.getGeotransform();
-
-  float sx = t[0] + x * t[1] + y * t[2];
-  float sy = t[3] + x * t[4] + y * t[5];
-
-  cout << sx << ", " << sy << endl;
 
   Watershed(flowdir, flowacc, x, y, cache_size);
 }
