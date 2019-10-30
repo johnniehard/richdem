@@ -101,8 +101,7 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y, vector<double> trans
 
 template <class elev_t>
 void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, int y, int cache_size) {
-  // cerr << "Starting" << endl;
-  
+ 
   // Create temporary folder
   mkdir("tmp", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
@@ -116,20 +115,12 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
   A2Array2D<bool> visited("tmp/visited/", flowdir.stdTileWidth(), flowdir.stdTileHeight(), flowdir.widthInTiles(), flowdir.heightInTiles(), cache_size);
   visited.setAll(false);
 
-  // Start timer
-  // Timer overall;
-  // overall.start();
-
   // queue
   std::queue<std::vector<int>> q;
 
-  std::vector<int> coords(2);
-  coords[0] = x;
-  coords[1] = y;
+  std::vector<int> coords = {x, y};
 
   auto flowacc_val = flowacc(x, y);
-
-  // cout << "flowacc value at " << x << "," << y << ": " << flowacc_val << endl;
 
   // add cell to queue
   q.push(coords);
@@ -176,15 +167,11 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
           q.push(coords);
       }
     }
-    // cout << "\r" << "cells: " << cells << flush;
   }
 
   assert(cells == flowacc_val);
 
-  // Print final time
-
   traceContour(watershed, x, y, flowacc.getGeotransform());
-  // cerr << "Wall-time = " << overall.stop() << endl;
 }
 
 } // namespace richdem
