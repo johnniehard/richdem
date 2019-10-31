@@ -627,6 +627,10 @@ class A2Array2D {
     GDALClose(fout);
   }
 
+  std::vector<double> getGeotransform(){
+    return data[0][0].geotransform;
+  }
+
   void setNoData(const T &ndval){
     for(auto &row: data)
     for(auto &tile: row)
