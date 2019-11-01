@@ -19,42 +19,49 @@ namespace richdem {
 
 #define PI 3.14159265
 
-// Rotate int unit vector by rad radians, i.e. +90deg, -90deg, 180deg
-std::vector<int> turn(std::vector<int> v, float rad){
-    float x = cos(rad) * (float)v[0] - sin(rad) * (float)v[1];
-    float y = sin(rad) * (float)v[0] + cos(rad) * (float)v[1];
+struct Point {
+    int x, y;
+    Point(int x, int y) : x(x), y(y) {}
+};
+bool operator==(const Point& lhs, const Point& rhs)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+};
 
-    return std::vector<int>{(int)x, (int)y};
+// Rotate int unit vector by rad radians, i.e. +90deg, -90deg, 180deg
+Point turn(Point v, float rad){
+    float x = cos(rad) * (float)v.x - sin(rad) * (float)v.y;
+    float y = sin(rad) * (float)v.x + cos(rad) * (float)v.y;
+
+    return Point((int)x, (int)y);
 }
 
 // Moore neighbourhood boundary tracing
-void traceContour(A2Array2D<bool> &watershed, int x, int y, vector<double> transform){
+void traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double> transform){
 
   // define list of points
-  vector<vector<int>> boundary_cells;
+  vector<Point> boundary_cells;
 
   // add starting point to list
-  boundary_cells.push_back(vector<int> {x, y});
+  boundary_cells.push_back(pour_point);
 
   // set starting point as current cell
-  vector<int> start_cell = {x, y};
-  vector<int> cell = start_cell;
+  Point cell = pour_point;
 
-  vector<int> start_dir;
+  Point start_dir = Point(0, 0);
   // check all neighbours to find empty cell, start towards that cell
   for(int i = 1; i <= 8; i+=2){
-    const int nx = x + dx[i];
-    const int ny = y + dy[i];
-    if(!watershed(nx, ny)){
-      start_dir = {dx[i], dy[i]};
+    Point nc = Point(cell.x + dx[i], cell.y + dy[i]);
+    if(!watershed(nc.x, nc.y)){
+      start_dir = Point(dx[i], dy[i]);
     }
   }
-  vector<int> dir = start_dir;
+  Point dir = start_dir;
 
   int count = 0;
   while(true){
     // Stopping criteria, stop when reaching start cell for second time
-    if(cell == start_cell && count > 0){
+    if(cell == pour_point && count > 0){
       break;
     }
     count++;
@@ -71,14 +78,12 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y, vector<double> trans
         dir = turn(dir, PI / 2);
       }
 
-      const int nx = cell[0] - dir[0];
-      const int ny = cell[1] - dir[1];
+      Point nc = Point(cell.x - dir.x, cell.y - dir.y);
 
       // Check if we've found a value
       // If so set neighbour to active cell and add cell to list of boundary cells
-      if(watershed(nx, ny)){
-        cell[0] = nx;
-        cell[1] = ny;
+      if(watershed(nc.x, nc.y)){
+        cell = nc;
         boundary_cells.push_back(cell);
         break;
       }
@@ -89,18 +94,19 @@ void traceContour(A2Array2D<bool> &watershed, int x, int y, vector<double> trans
   cout << "x, y" << endl;
   for(size_t i=0; i < boundary_cells.size(); i++){
 
-    int raster_x = boundary_cells[i][0];
-    int raster_y = boundary_cells[i][1];
+    Point bc = boundary_cells[i];
 
-    float geo_x = transform[0] + raster_x * transform[1] + raster_y * transform[2];
-    float geo_y = transform[3] + raster_x * transform[4] + raster_y * transform[5];
+    float geo_x = transform[0] + bc.x * transform[1] + bc.y * transform[2];
+    float geo_y = transform[3] + bc.x * transform[4] + bc.y * transform[5];
 
     cout << fixed << setprecision(1) << geo_x << ", " << geo_y << endl;
   }
 }
 
 template <class elev_t>
-void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, int y, int cache_size) {
+void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pour_point, int cache_size) {
+
+  assert(pour_point.x > 0 && pour_point.y > 0);
  
   // Create temporary folders and datasets
   mkdir("tmp", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -114,14 +120,14 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
   visited.setAll(false);
 
   // queue
-  std::queue<std::vector<int>> q;
+  std::queue<Point> q;
 
-  std::vector<int> coords = {x, y};
+  // std::vector<int> coords = {x, y};
 
-  auto flowacc_val = flowacc(x, y);
+  auto flowacc_val = flowacc(pour_point.x, pour_point.y);
 
   // add cell to queue
-  q.push(coords);
+  q.push(pour_point);
 
   int cells = 0;
   // while queue is not empty
@@ -132,13 +138,13 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
     const auto c = q.front();
     q.pop();
 
-    int x = c[0];
-    int y = c[1];
+    // int x = c[0];
+    // int y = c[1];
 
-    auto value = flowdir(x, y);
+    auto value = flowdir(c.x, c.y);
 
-    watershed(x, y) = true;
-    visited(x, y) = true;
+    watershed(c.x, c.y) = true;
+    visited(c.x, c.y) = true;
 
     // look at cells neighbours
     for (int n = 1; n <= 8; n++) {
@@ -147,27 +153,25 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, int x, in
         continue;
       }
 
-      const int nx = x + dx[n];
-      const int ny = y + dy[n];
+      Point nc = Point(c.x + dx[n], c.y + dy[n]);
 
-      if(visited(nx, ny)){
+      if(visited(nc.x, nc.y)){
         continue;
       }
 
-      auto& n_value = flowdir(nx, ny);
+      auto& n_value = flowdir(nc.x, nc.y);
 
       // check if neighbour flows in to cell
       // if so mark it as part of the watershed and add neighbour to queue
       if(n_value == d8_inverse[n]){
-          std::vector<int> coords = {nx, ny};
-          q.push(coords);
+          q.push(nc);
       }
     }
   }
 
   assert(cells == flowacc_val);
 
-  traceContour(watershed, x, y, flowacc.getGeotransform());
+  traceContour(watershed, pour_point, flowacc.getGeotransform());
 }
 
 } // namespace richdem
@@ -191,7 +195,9 @@ int main(int argc, char** argv) {
   double raster_x = (1 / (transform[1]*transform[5]-transform[2]*transform[4])) * ( transform[5] * (geo_x - transform[0]) - transform[2] * (geo_y - transform[3]));
   double raster_y = (1 / (transform[1]*transform[5]-transform[2]*transform[4])) * ( transform[1] * (geo_y - transform[3]) - transform[4] * (geo_x - transform[0]));
 
-  Watershed(flowdir, flowacc, raster_x, raster_y, cache_size);
+  Point pour_point = Point((int)raster_x, (int)raster_y);
+
+  Watershed(flowdir, flowacc, pour_point, cache_size);
 }
 
 #endif
