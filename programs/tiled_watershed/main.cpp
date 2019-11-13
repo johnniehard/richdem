@@ -174,12 +174,21 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pou
   traceContour(watershed, pour_point, flowacc.getGeotransform());
 }
 
+void SnapToFlowacc(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pour_point, int cache_size, int threshold) {
+
+  // Follow flow direction until meeting a flow accumulation >= threshold
+
+  // Print out geo coordinates of cell
+
+}
+
 } // namespace richdem
 
 int main(int argc, char** argv) {
-  if (argc != 5) {
-    cerr << "Usage: ./watershed.exe layoutfile_flowdir layoutfile_flowacc x y" << endl;
+  if (argc != 6) {
+    cerr << "Usage: ./watershed.exe layoutfile_flowdir layoutfile_flowacc x y function" << endl;
     cerr << "Layout file should be for flow direction raster" << endl;
+    cerr << "function can be either 'watershed' or 'snap'" << endl;
     return 1;
   }
 
@@ -190,6 +199,8 @@ int main(int argc, char** argv) {
   double geo_x = stod(argv[3]);
   double geo_y = stod(argv[4]);
 
+  string function = string(argv[5]);
+
   // https://gdal.org/api/gdaldataset_cpp.html#_CPPv4N11GDALDataset15GetGeoTransformEPd
   vector<double> transform = flowacc.getGeotransform();
   double raster_x = (1 / (transform[1]*transform[5]-transform[2]*transform[4])) * ( transform[5] * (geo_x - transform[0]) - transform[2] * (geo_y - transform[3]));
@@ -197,7 +208,12 @@ int main(int argc, char** argv) {
 
   Point pour_point = Point((int)raster_x, (int)raster_y);
 
-  Watershed(flowdir, flowacc, pour_point, cache_size);
+  if(function == "watershed"){
+    Watershed(flowdir, flowacc, pour_point, cache_size);
+  }
+  else if(function == "snap"){
+    SnapToFlowacc(flowdir, flowacc, pour_point, cache_size, 10000);
+  }
 }
 
 #endif
