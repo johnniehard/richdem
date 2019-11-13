@@ -11,7 +11,7 @@ mkdir out_tiler
 echo "breach"
 rm -rf out_breach
 mkdir out_breach
-./tiled_lindsay_breaching/breaching.exe 512 ./out_tiler/layout.layout ./out_breach/%f.tif
+./tiled_lindsay_breaching/breaching.exe ./out_tiler/layout.layout ./out_breach/%f.tif
 
 echo "flatres"
 rm -rf out_flatres

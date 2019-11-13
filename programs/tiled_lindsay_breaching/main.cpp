@@ -317,20 +317,20 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 } // namespace richdem
 
 int main(int argc, char** argv) {
-  if (argc != 4) {
-    cerr << "Usage: ./breaching cachesize layoutfile outpath" << endl;
+  if (argc != 3) {
+    cerr << "Usage: ./breaching layoutfile outpath" << endl;
     cerr << "outpath must include a %f" << endl;
     return 1;
   }
 
-  assert(string(argv[3]).find_last_of("/") != string::npos);
-  assert(string(argv[3]).find("%f") != string::npos);
+  assert(string(argv[2]).find_last_of("/") != string::npos);
+  assert(string(argv[2]).find("%f") != string::npos);
 
-  int cache_size = stoi(argv[1]);
-  A2Array2D<double> dem(argv[2], cache_size);
+  int cache_size = 256;
+  A2Array2D<double> dem(argv[1], cache_size);
 
   Lindsay2016(dem, LindsayMode::COMPLETE_BREACHING, true, true, std::numeric_limits<uint32_t>::max(), std::numeric_limits<double>::max(), cache_size);
-  auto foldername = string(argv[3]).substr(0, string(argv[3]).find_last_of("/")).c_str();
+  auto foldername = string(argv[2]).substr(0, string(argv[2]).find_last_of("/")).c_str();
   mkdir(foldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   cout << "Saving final output" << endl;
   dem.saveGDAL(argv[2]);
