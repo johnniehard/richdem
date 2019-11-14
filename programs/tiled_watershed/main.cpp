@@ -104,7 +104,7 @@ void traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double> t
 }
 
 template <class elev_t>
-void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pour_point, int cache_size) {
+A2Array2D<bool> Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pour_point, int cache_size) {
 
   assert(pour_point.x > 0 && pour_point.y > 0);
  
@@ -171,7 +171,7 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pou
 
   assert(cells == flowacc_val);
 
-  traceContour(watershed, pour_point, flowacc.getGeotransform());
+  return watershed;
 }
 
 template <class elev_t>
@@ -252,7 +252,8 @@ int main(int argc, char** argv) {
   Point pour_point = Point((int)raster_x, (int)raster_y);
 
   if(function == "watershed"){
-    Watershed(flowdir, flowacc, pour_point, cache_size);
+    A2Array2D<bool> watershed = Watershed(flowdir, flowacc, pour_point, cache_size);
+    traceContour(watershed, pour_point, flowacc.getGeotransform());
   }
   else if(function == "snap"){
     int theshold = stoi(argv[6]);
