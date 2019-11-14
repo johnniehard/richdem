@@ -174,12 +174,37 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pou
   traceContour(watershed, pour_point, flowacc.getGeotransform());
 }
 
+template <class elev_t>
 void SnapToFlowacc(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pour_point, int cache_size, int threshold) {
 
+  Point c = pour_point;
+
   // Follow flow direction until meeting a flow accumulation >= threshold
+  while(true){
+
+    int flowacc_val = flowacc(c.x, c.y);
+
+    // Check current cell value against threshold
+    if(flowacc_val >= threshold){
+      break;
+    }
+
+    // look up flow direction
+    int dir = flowdir(c.x, c.y);
+
+    // set current cell to downstream neighbour
+    c = Point(c.x + dx[dir], c.y + dy[dir]);
+  }
 
   // Print out geo coordinates of cell
+  cout << "x, y" << endl;
 
+  vector<double> transform = flowacc.getGeotransform();
+
+  float geo_x = transform[0] + c.x * transform[1] + c.y * transform[2];
+  float geo_y = transform[3] + c.x * transform[4] + c.y * transform[5];
+
+  cout << fixed << setprecision(1) << geo_x << ", " << geo_y << endl;
 }
 
 } // namespace richdem
