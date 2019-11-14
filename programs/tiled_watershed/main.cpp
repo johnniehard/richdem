@@ -174,12 +174,65 @@ void Watershed(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pou
   traceContour(watershed, pour_point, flowacc.getGeotransform());
 }
 
+template <class elev_t>
+void SnapToFlowacc(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point pour_point, int cache_size, int threshold) {
+
+  Point c = pour_point;
+
+  // Follow flow direction until meeting a flow accumulation >= threshold
+  while(true){
+
+    int flowacc_val = flowacc(c.x, c.y);
+
+    // Check current cell value against threshold
+    if(flowacc_val >= threshold){
+      break;
+    }
+
+    // look up flow direction
+    int dir = flowdir(c.x, c.y);
+
+    // set current cell to downstream neighbour
+    c = Point(c.x + dx[dir], c.y + dy[dir]);
+  }
+
+  // Print out geo coordinates of cell
+  cout << "x, y" << endl;
+
+  vector<double> transform = flowacc.getGeotransform();
+
+  float geo_x = transform[0] + c.x * transform[1] + c.y * transform[2];
+  float geo_y = transform[3] + c.x * transform[4] + c.y * transform[5];
+
+  cout << fixed << setprecision(1) << geo_x << ", " << geo_y << endl;
+}
+
 } // namespace richdem
 
+void usage(){
+  cerr << "Usage: ./watershed.exe layoutfile_flowdir layoutfile_flowacc x y function <threshold>" << endl;
+  cerr << "Layout file should be for flow direction raster" << endl;
+  cerr << "function can be either 'watershed' or 'snap'" << endl;
+  cerr << "pass a threshold value if using snap" << endl;
+}
+
 int main(int argc, char** argv) {
-  if (argc != 5) {
-    cerr << "Usage: ./watershed.exe layoutfile_flowdir layoutfile_flowacc x y" << endl;
-    cerr << "Layout file should be for flow direction raster" << endl;
+
+  string function = string(argv[5]);
+
+  if(function == "watershed"){
+    if (argc != 6) {
+      usage();
+      return 1;
+    }
+  }
+  else if(function == "snap"){
+    if (argc != 7) {
+      usage();
+      return 1;
+    }
+  } else {
+    usage();
     return 1;
   }
 
@@ -190,6 +243,7 @@ int main(int argc, char** argv) {
   double geo_x = stod(argv[3]);
   double geo_y = stod(argv[4]);
 
+
   // https://gdal.org/api/gdaldataset_cpp.html#_CPPv4N11GDALDataset15GetGeoTransformEPd
   vector<double> transform = flowacc.getGeotransform();
   double raster_x = (1 / (transform[1]*transform[5]-transform[2]*transform[4])) * ( transform[5] * (geo_x - transform[0]) - transform[2] * (geo_y - transform[3]));
@@ -197,7 +251,13 @@ int main(int argc, char** argv) {
 
   Point pour_point = Point((int)raster_x, (int)raster_y);
 
-  Watershed(flowdir, flowacc, pour_point, cache_size);
+  if(function == "watershed"){
+    Watershed(flowdir, flowacc, pour_point, cache_size);
+  }
+  else if(function == "snap"){
+    int theshold = stoi(argv[6]);
+    SnapToFlowacc(flowdir, flowacc, pour_point, cache_size, theshold);
+  }
 }
 
 #endif
