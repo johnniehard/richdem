@@ -1,11 +1,14 @@
 #!/bin/bash
 
-echo $1
-echo $2
-echo $3
-echo $4
+X=$1
+Y=$2
+FUNCTION=$3
+THRESHOLD=$4
 
-# lldb ./watershed.exe -- /home/johnnie/kod/flodesapp/localdata/geodata/richdem-out/out_flatres/layout.layout /home/johnnie/kod/flodesapp/localdata/geodata/richdem-out/out_accum/layout.layout $1 $2
-# ./watershed.exe /home/johnnie/kod/flodesapp/localdata/geodata/richdem-out/out_flatres/layout.layout /home/johnnie/kod/flodesapp/localdata/geodata/richdem-out/out_accum/layout.layout $1 $2 # | node mangle.js | ogr2ogr -f GeoJSON -s_srs EPSG:3006 -t_srs EPSG:4326 /vsistdout/ /vsistdin/
+D8_PNTR="/home/johnnie/kod/flodesapp/localdata/geodata/richdem-out/out_flatres/layout.layout"
+FLOW_ACC="/home/johnnie/kod/flodesapp/localdata/geodata/richdem-out/out_accum/layout.layout"
 
-./watershed.exe /home/johnnie/kod/flodesapp/localdata/geodata/richdem-out/out_flatres/layout.layout /home/johnnie/kod/flodesapp/localdata/geodata/richdem-out/out_accum/layout.layout $1 $2 $3 $4
+MANGLE="node mangle.js"
+OGR="ogr2ogr -f GeoJSON -s_srs EPSG:3006 -t_srs EPSG:4326 /vsistdout/ /vsistdin/"
+
+./watershed.exe $D8_PNTR $FLOW_ACC $X $Y $FUNCTION $THRESHOLD | $MANGLE | $OGR
