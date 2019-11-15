@@ -28,6 +28,11 @@ bool operator==(const Point& lhs, const Point& rhs)
     return lhs.x == rhs.x && lhs.y == rhs.y;
 };
 
+struct Bounds {
+  Point min, max;
+  Bounds(Point min, Point max) : min(min), max(max) {}
+};
+
 // Rotate int unit vector by rad radians, i.e. +90deg, -90deg, 180deg
 Point turn(Point v, float rad){
     float x = cos(rad) * (float)v.x - sin(rad) * (float)v.y;
@@ -37,7 +42,7 @@ Point turn(Point v, float rad){
 }
 
 // Moore neighbourhood boundary tracing
-void traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double> transform){
+Bounds traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double> transform){
 
   // define list of points
   vector<Point> boundary_cells;
@@ -90,17 +95,34 @@ void traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double> t
     }
 
   }
+
+  Bounds bounds = Bounds(Point(INT_MAX, INT_MAX), Point(INT_MIN, INT_MIN));
  
   cout << "x, y" << endl;
   for(size_t i=0; i < boundary_cells.size(); i++){
 
     Point bc = boundary_cells[i];
 
+    if(bc.x < bounds.min.x){
+      bounds.min.x = bc.x;
+    }
+    if(bc.y < bounds.min.y){
+      bounds.min.y = bc.y;
+    }
+    if(bc.x > bounds.max.x){
+      bounds.max.x = bc.x;
+    }
+    if(bc.y > bounds.max.y){
+      bounds.max.y = bc.y;
+    }
+
     float geo_x = transform[0] + bc.x * transform[1] + bc.y * transform[2];
     float geo_y = transform[3] + bc.x * transform[4] + bc.y * transform[5];
 
     cout << fixed << setprecision(1) << geo_x << ", " << geo_y << endl;
   }
+
+  return bounds;
 }
 
 template <class elev_t>
@@ -207,6 +229,41 @@ void SnapToFlowacc(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point
   cout << fixed << setprecision(1) << geo_x << ", " << geo_y << endl;
 }
 
+void zonalStats(A2Array2D<bool> &watershed, A2Array2D<int> &nmd, Bounds watershed_bounds, vector<double> ws_transform) {
+
+  vector<double> nmd_transform = nmd.getGeotransform();
+
+  int stats[256] = { 0 };
+
+  for (int y = watershed_bounds.min.y; y < watershed_bounds.max.y; y++) {
+    // cout << "\r" << (int)(100*(float)(y+1)/watershed_bounds.max.y) << "%" << flush;
+    for (int x = watershed_bounds.min.x; x < watershed_bounds.max.x; x++) {
+      bool val = watershed(x, y);
+      if(val){
+        // Get SWEREF coord for watershed xy
+        float geo_x = ws_transform[0] + x * ws_transform[1] + y * ws_transform[2];
+        float geo_y = ws_transform[3] + x * ws_transform[4] + y * ws_transform[5];
+        
+        // Get NMD xy for SWEREF coord
+        double raster_x = (1 / (nmd_transform[1]*nmd_transform[5]-nmd_transform[2]*nmd_transform[4])) * ( nmd_transform[5] * (geo_x - nmd_transform[0]) - nmd_transform[2] * (geo_y - nmd_transform[3]));
+        double raster_y = (1 / (nmd_transform[1]*nmd_transform[5]-nmd_transform[2]*nmd_transform[4])) * ( nmd_transform[1] * (geo_y - nmd_transform[3]) - nmd_transform[4] * (geo_x - nmd_transform[0]));
+
+        // Get NMD value
+        int nmd_value = nmd(raster_x, raster_y);
+
+        // Update stats array
+        stats[nmd_value] += 1;
+      }
+    }
+  }
+
+  cout << "nmd_klass, count" << endl;
+  for (int i = 0; i < 256; i++){
+    cout << i << ", " << stats[i] << endl;
+  }
+
+}
+
 } // namespace richdem
 
 void usage(){
@@ -239,7 +296,7 @@ int main(int argc, char** argv) {
   int cache_size = 256;
   A2Array2D<double> flowdir(argv[1], cache_size);
   A2Array2D<double> flowacc(argv[2], cache_size);
-  A2Array2D<double> nmd(argv[3], cache_size);
+  A2Array2D<int> nmd(argv[3], cache_size);
 
   double geo_x = stod(argv[4]);
   double geo_y = stod(argv[5]);
@@ -254,7 +311,10 @@ int main(int argc, char** argv) {
 
   if(function == "watershed"){
     A2Array2D<bool> watershed = Watershed(flowdir, flowacc, pour_point, cache_size);
-    traceContour(watershed, pour_point, flowacc.getGeotransform());
+    Bounds watershed_bounds = traceContour(watershed, pour_point, flowacc.getGeotransform());
+    // cout << watershed_bounds.min.x <<  " " << watershed_bounds.min.y <<  " " << watershed_bounds.max.x <<  " " << watershed_bounds.max.y << endl;
+    cout << "---" << endl;
+    zonalStats(watershed, nmd, watershed_bounds, transform);
   }
   else if(function == "snap"){
     int theshold = stoi(argv[6]);
