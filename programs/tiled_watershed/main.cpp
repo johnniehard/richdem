@@ -210,7 +210,7 @@ void SnapToFlowacc(A2Array2D<elev_t> &flowdir, A2Array2D<elev_t> &flowacc, Point
 } // namespace richdem
 
 void usage(){
-  cerr << "Usage: ./watershed.exe layoutfile_flowdir layoutfile_flowacc x y function <threshold>" << endl;
+  cerr << "Usage: ./watershed.exe layoutfile_flowdir layoutfile_flowacc layoutfile_NMD x y function <threshold>" << endl;
   cerr << "Layout file should be for flow direction raster" << endl;
   cerr << "function can be either 'watershed' or 'snap'" << endl;
   cerr << "pass a threshold value if using snap" << endl;
@@ -218,16 +218,16 @@ void usage(){
 
 int main(int argc, char** argv) {
 
-  string function = string(argv[5]);
+  string function = string(argv[6]);
 
   if(function == "watershed"){
-    if (argc != 6) {
+    if (argc != 7) {
       usage();
       return 1;
     }
   }
   else if(function == "snap"){
-    if (argc != 7) {
+    if (argc != 8) {
       usage();
       return 1;
     }
@@ -239,9 +239,10 @@ int main(int argc, char** argv) {
   int cache_size = 256;
   A2Array2D<double> flowdir(argv[1], cache_size);
   A2Array2D<double> flowacc(argv[2], cache_size);
+  A2Array2D<double> nmd(argv[3], cache_size);
 
-  double geo_x = stod(argv[3]);
-  double geo_y = stod(argv[4]);
+  double geo_x = stod(argv[4]);
+  double geo_y = stod(argv[5]);
 
 
   // https://gdal.org/api/gdaldataset_cpp.html#_CPPv4N11GDALDataset15GetGeoTransformEPd
