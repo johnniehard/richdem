@@ -259,9 +259,10 @@ void zonalStats(A2Array2D<bool> &watershed, A2Array2D<int> &nmd, Bounds watershe
 
   cout << "nmd_klass, count" << endl;
   for (int i = 0; i < 256; i++){
-    cout << i << ", " << stats[i] << endl;
+    if(stats[i] > 0){
+      cout << i << ", " << stats[i] << endl;
+    }
   }
-
 }
 
 } // namespace richdem
