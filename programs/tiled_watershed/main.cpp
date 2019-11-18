@@ -296,7 +296,6 @@ int main(int argc, char** argv) {
   int cache_size = 256;
   A2Array2D<double> flowdir(argv[1], cache_size);
   A2Array2D<double> flowacc(argv[2], cache_size);
-  A2Array2D<int> nmd(argv[3], cache_size);
 
   double geo_x = stod(argv[4]);
   double geo_y = stod(argv[5]);
@@ -314,10 +313,11 @@ int main(int argc, char** argv) {
     Bounds watershed_bounds = traceContour(watershed, pour_point, flowacc.getGeotransform());
     // cout << watershed_bounds.min.x <<  " " << watershed_bounds.min.y <<  " " << watershed_bounds.max.x <<  " " << watershed_bounds.max.y << endl;
     cout << "---" << endl;
+    A2Array2D<int> nmd(argv[3], cache_size);
     zonalStats(watershed, nmd, watershed_bounds, transform);
   }
   else if(function == "snap"){
-    int theshold = stoi(argv[6]);
+    int theshold = stoi(argv[7]);
     SnapToFlowacc(flowdir, flowacc, pour_point, cache_size, theshold);
   }
 }
