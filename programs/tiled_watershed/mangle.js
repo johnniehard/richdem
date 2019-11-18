@@ -11,7 +11,7 @@ const fc = {
     "features": [
         {
             "type": "Feature",
-            "properties": {},
+            "properties": {nmd: {}},
             "geometry": {
                 "type": "Polygon",
                 "coordinates": [[]]
@@ -20,10 +20,29 @@ const fc = {
     ]
 }
 
+part = 0
+
 rl.on('line', line => {
-    const [x, y] = line.trim().split(',')
-    if(x === 'x') return
-    fc.features[0].geometry.coordinates[0].push([+x, +y])
+    switch(part){
+        case 0:
+            // First result: the coordinates of the polygon
+            if (line === "---"){
+                part += 1
+                return
+            }
+            const [x, y] = line.trim().split(',')
+            if(x === 'x') return
+            fc.features[0].geometry.coordinates[0].push([+x, +y])
+            break
+        case 1:
+            // Second result: ground cover classifications
+            const [nmd_klass, count] = line.trim().split(',')
+            if(nmd_klass === "nmd_klass") return
+            fc.features[0].properties.nmd[nmd_klass] = +count * 4
+            break
+        default:
+            return
+    }
 })
 
 
