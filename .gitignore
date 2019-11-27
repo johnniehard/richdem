@@ -9,3 +9,4 @@ a.out
 travis.log
 programs/out_*/
 .vscode
+*log.txt
