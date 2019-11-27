@@ -174,11 +174,13 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   // The Priority-Flood operation assures that we reach pit cells by passing
   // into depressions over the outlet of minimal elevation on their edge.
   cerr << "Breaching..." << endl;
-  int total = dem.height() * dem.width();
   int done = 0;
+  int pits_left = total_pits;
   while (!pq.empty()) {
     done++;
-    if ((done % 1000) == 0) cout << "\r" << (int)(100*done/(float)total) << "%" << flush;
+    if ((done % 1000) == 0){
+      cout << "\r" << (int)(( pits_left / (float)total_pits) * 100) << "%. Loops done:" << done << flush;
+    }
 
     const auto c = pq.top();
     pq.pop();
@@ -259,9 +261,11 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
         }
       }
 
-      --total_pits;
-      if (total_pits == 0)
+      --pits_left;
+      if (pits_left == 0){
+        cout << "\r" << (int)(( pits_left / (float)total_pits) * 100) << "%. Loops done:" << done << flush;
         break;
+      }
     }
 
     // Looks for neighbours which are either unvisited or pits
