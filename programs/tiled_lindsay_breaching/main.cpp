@@ -66,10 +66,24 @@ enum LindsayCellType { UNVISITED, VISITED, EDGE };
     The correctness of this command is determined by inspection and simple unit
     tests.
 */
+
+struct CellData {
+  uint32_t backlink;
+  uint8_t visited;
+  uint8_t pits;
+};
+
 template <class elev_t>
 void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
                  bool fill_depressions, uint32_t maxpathlen, elev_t maxdepth, int cache_size) {
   cerr << "Starting" << endl;
+
+
+  // Move cursor to top left of screen
+  std::cout << "\033[0;0;H";
+  // Clear screen
+  std::cout << "\033[0;J";
+
   RDLOG_ALG_NAME << "Lindsay2016: Breach/Fill Depressions (EXPERIMENTAL!)";
   RDLOG_CITATION
       << "Lindsay, J.B., 2016. Efficient hybrid breaching-filling sink removal "
@@ -115,6 +129,8 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   
   for (int y = 0; y < dem.height(); y++) {
     cout << "\r" << (int)(100*(float)(y+1)/dem.height()) << "%" << flush;
+    dem.print_cache_debug();
+
     for (int x = 0; x < dem.width(); x++) {
       auto& elevation = dem(x, y);
 
@@ -179,7 +195,8 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   while (!pq.empty()) {
     done++;
     if ((done % 1000) == 0){
-      cout << "\r" << (int)(( pits_left / (float)total_pits) * 100) << "%. Loops done:" << done << flush;
+      cout << "\r" << (int)(100 - ( pits_left / (float)total_pits) * 100) << "%. Loops done:" << done << flush;
+      dem.print_cache_debug();
     }
 
     const auto c = pq.top();
@@ -330,8 +347,11 @@ int main(int argc, char** argv) {
   assert(string(argv[2]).find_last_of("/") != string::npos);
   assert(string(argv[2]).find("%f") != string::npos);
 
-  int cache_size = 256;
+  int cache_size = 5000;
+  cout << "Reading tile metadata..." << flush;
   A2Array2D<double> dem(argv[1], cache_size);
+  cout << " done" << endl;
+
 
   Lindsay2016(dem, LindsayMode::COMPLETE_BREACHING, true, true, std::numeric_limits<uint32_t>::max(), std::numeric_limits<double>::max(), cache_size);
   auto foldername = string(argv[2]).substr(0, string(argv[2]).find_last_of("/")).c_str();

@@ -97,6 +97,8 @@ class A2Array2D {
   int64_t total_height_in_cells   = 0;
   int32_t per_tile_width          = 0;
   int32_t per_tile_height         = 0;
+  int32_t per_tile_width_log2     = 0;
+  int32_t per_tile_height_log2     = 0;
   int32_t evictions               = 0;
   int64_t cells_in_not_null_tiles = 0;
   T       no_data_to_set; //Used to disguise null tiles
@@ -259,6 +261,7 @@ class A2Array2D {
 
     RDLOG_MISC<<"Tiles that were not null = "<<not_null_tiles;
     RDLOG_MISC<<"Total tiles = "<<(data[0].size()*data.size());
+    update_per_tile_width();
   }
 
   A2Array2D(std::string prefix, int per_tile_width, int per_tile_height, int width, int height, int cachesize){
@@ -289,6 +292,7 @@ class A2Array2D {
     quick_width_in_tiles  = width;
     quick_height_in_tiles = height;
     null_tile_quick.resize(quick_width_in_tiles*quick_height_in_tiles, false);
+    update_per_tile_width();
   }
 
   template<class U>
@@ -326,6 +330,44 @@ class A2Array2D {
         this_tile.created            = false;
       }
     }
+    update_per_tile_width();
+  }
+
+  void print_cache_debug() {
+    // Move cursor to top left of screen
+    std::cout << "\033[0;0;H";
+    // Clear screen
+    // std::cout << "\033[0;J";
+    for (int y = 0; y < (int)data.size(); y++) {
+      for (int x =0 ; x < (int)data.size(); x++) {
+        if (data[y][x].loaded) {
+          std::cout << "#";
+        } else if (isNullTile(x,y)) {
+          std::cout << "-";
+        } else {
+          std::cout << ".";
+        }
+      }
+      std::cout << std::endl;
+    }
+  }
+
+  void update_per_tile_width() {
+    if ((per_tile_width & (per_tile_width - 1)) != 0) {
+      std::cerr << "Tile width must be a power of 2. Found " + std::to_string(per_tile_height);
+      throw std::exception();
+    }
+    if ((per_tile_height & (per_tile_height - 1)) != 0) {
+      std::cerr << "Tile height must be a power of 2. Found " + std::to_string(per_tile_height);
+      throw std::exception();
+    }
+
+    assert(per_tile_height > 0);
+    assert(per_tile_width > 0);
+    per_tile_height_log2 = 1;
+    while((1 << per_tile_height_log2) != per_tile_height) per_tile_height_log2++;
+    per_tile_width_log2 = 1;
+    while((1 << per_tile_width_log2) != per_tile_width) per_tile_width_log2++;
   }
 
   // T& getn(int tx, int ty, int x, int y, int dx, int dy){
@@ -398,10 +440,16 @@ class A2Array2D {
     assert(x<total_width_in_cells);
     assert(y<total_height_in_cells);
 
-    int32_t tile_x = x/per_tile_width;
-    int32_t tile_y = y/per_tile_height;
-    x              = x%per_tile_width;
-    y              = y%per_tile_height;
+    // Use bit twiddling tricks instead of slow divisions and modulo
+    // We can do this since we check in the constructor that per_tile_width and height are powers of two.
+    // int32_t tile_x = x/per_tile_width;
+    // int32_t tile_y = y/per_tile_height;
+    // x              = x%per_tile_width;
+    // y              = y%per_tile_height;
+    int32_t tile_x = x >> per_tile_width_log2;
+    int32_t tile_y = y >> per_tile_height_log2;
+    x = x & (per_tile_width - 1);
+    y = y & (per_tile_height - 1);
 
     if(isNullTile(tile_x,tile_y)){
       no_data_to_set = data[tile_y][tile_x].noData();
