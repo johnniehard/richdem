@@ -6,6 +6,7 @@ const rl = readline.createInterface({
     terminal: false
 })
 
+// This is a featurecollection and not a straight feature because we want to be able to open the result directly in QGIS without hassle.
 const fc = {
     "type": "FeatureCollection",
     "features": [
