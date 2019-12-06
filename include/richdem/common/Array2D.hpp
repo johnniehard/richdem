@@ -129,6 +129,57 @@ class Array2D {
 
   #ifdef USEGDAL
   ///TODO
+  void loadGDAL(GDALDataset *gdal, xy_t xOffset=0, xy_t yOffset=0, xy_t part_width=0, xy_t part_height=0, bool exact=false, bool load_data=true){
+    assert(empty());
+    assert(gdal != nullptr);
+
+    from_cache = false;
+
+    this->filename = "<none>";
+	
+    auto* fin = gdal;
+    geotransform.resize(6);
+    if(fin->GetGeoTransform(geotransform.data())!=CE_None){
+      RDLOG_WARN<<"Could not get a geotransform from existing gdal file! Setting to an arbitrary standard geotransform.";
+      geotransform = {{1000., 1., 0., 1000., 0., -1.}};
+    }
+
+    metadata = ProcessMetadata(fin->GetMetadata());
+
+    const char* projection_string=fin->GetProjectionRef();
+    projection = std::string(projection_string);
+
+    GDALRasterBand *band = fin->GetRasterBand(1);
+
+    xy_t total_width  = band->GetXSize();         //Returns an int
+    xy_t total_height = band->GetYSize();         //Returns an int
+    no_data           = band->GetNoDataValue();
+
+    if(exact && (total_width-xOffset!=part_width || total_height-yOffset!=part_height))
+      throw std::runtime_error("Tile dimensions did not match expectations!");
+
+    //TODO: What's going on here?
+
+    if(xOffset+part_width>=total_width)
+      part_width  = total_width-xOffset;
+    if(yOffset+part_height>=total_height)
+      part_height = total_height-yOffset;
+
+    if(part_width==0)
+      part_width = total_width;
+    view_width = part_width;
+
+    if(part_height==0)
+      part_height = total_height;
+    view_height = part_height;
+
+    view_xoff = xOffset;
+    view_yoff = yOffset;
+
+    if(load_data)
+      loadData(gdal);
+  }
+
   void loadGDAL(const std::string &filename, xy_t xOffset=0, xy_t yOffset=0, xy_t part_width=0, xy_t part_height=0, bool exact=false, bool load_data=true){
     assert(empty());
 
@@ -205,7 +256,7 @@ class Array2D {
   */
   //TODO: Should save metadata
   void saveToCache(const std::string &filename){
-    std::cout << "Saving to " << filename << std::endl;
+    //std::cout << "Saving to " << filename << std::endl;
     std::fstream fout;
 
     from_cache     = true;
@@ -366,6 +417,13 @@ class Array2D {
     }
   }
 
+  Array2D(GDALDataset* gdal, xy_t xOffset=0, xy_t yOffset=0, xy_t part_width=0, xy_t part_height=0, bool exact=false, bool load_data=true) : Array2D() {
+    #ifdef USEGDAL
+    loadGDAL(gdal, xOffset, yOffset, part_width, part_height, exact, load_data);
+    #else
+      throw std::runtime_error("RichDEM was not compiled with GDAL!");
+    #endif
+  }
   void setCacheFilename(const std::string &filename){
     this->filename = filename;
   }
@@ -382,6 +440,34 @@ class Array2D {
     clear();
   }
 
+  /**
+    @brief Loads data from disk into RAM. 
+
+    If dumpData() has been previously called, data is loaded from the cache; 
+    otherwise, it is loaded from a GDAL file. No data is loaded if data is
+    already present in RAM.
+  */
+  void loadData(GDALDataset* fin) {
+    if(!data.empty())
+      throw std::runtime_error("Data already loaded!");
+
+    if(from_cache){
+      loadNative(filename, true);
+    } else {
+      #ifdef USEGDAL
+
+      GDALRasterBand *band = fin->GetRasterBand(1);
+
+      resize(view_width,view_height);
+      auto temp = band->RasterIO( GF_Read, view_xoff, view_yoff, view_width, view_height, data.data(), view_width, view_height, myGDALType(), 0, 0 );
+        if(temp!=CE_None)
+          throw std::runtime_error("An error occured while trying to read '"+filename+"' into RAM with GDAL.");
+
+      #else
+        throw std::runtime_error("RichDEM was not compiled with GDAL!");
+      #endif
+    }
+  }
   /**
     @brief Loads data from disk into RAM. 
 

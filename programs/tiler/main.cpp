@@ -85,18 +85,20 @@ template <class T> void SaveTiles(TileGrid &tiles) {
 
   cout << endl;
   auto firstTile = tiles[0][0];
+  GDALDataset* gdal = (GDALDataset*)GDALOpen(tiles.at(0).at(0).filename.c_str(), GA_ReadOnly);
+
   for (int y = 0; y < gridheight; y++) {
     for (int x = 0; x < gridwidth; x++) {
       if (tiles[y][x].nullTile)
         continue;
 
-      cout << "\rProcessing tile " << (y * gridwidth + x) << " of "
-           << (gridwidth * gridheight) << flush;
-
+      cout << "\rProcessing " << ((int)(100*(y*gridwidth + x)/(float)(gridwidth*gridheight))) << "% tile " << (y * gridwidth + x) << " of " << (gridwidth * gridheight) << flush;
       auto &tile = tiles.at(y).at(x);
-      auto data = Array2D<T>(tile.filename, false, tile.x, tile.y, tile.width,
-                             tile.height);
 
+      //auto data = Array2D<T>(tile.filename, false, tile.x, tile.y, tile.width, tile.height);
+      auto data = Array2D<T>(gdal, tile.x, tile.y, tile.width, tile.height, false, true);
+
+      // Make sure all tiles are equally large
       auto newData = data;
       newData.resize(firstTile.width, firstTile.height, data.noData());
       for (int y0 = 0; y0 < data.height(); y0++) {
