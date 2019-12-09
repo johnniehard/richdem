@@ -284,6 +284,11 @@ std::vector<T> read_backwards(std::istream &is, int size) {
 }
 
 template <class elev_t>
+int elevation2index(elev_t elevation, elev_t minElevation, elev_t maxElevation) {
+  return max(0, (int)((10000 - 1) * (elevation - minElevation)/(double)(maxElevation - minElevation)));
+}
+
+template <class elev_t>
 void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
                  bool fill_depressions, uint32_t maxpathlen, elev_t maxdepth, int cache_size) {
   cerr << "Starting" << endl;
@@ -331,12 +336,16 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   MemoryMappedArray2D<uint8_t> pits("pits.binary", dem.width(), dem.height());
   MemoryMappedArray2D<bool> endpoint("endpoint.binary", dem.width(), dem.height());
 #else
-  dem.cow("tmp/out/");
   A2Array2D<uint32_t> backlinks("tmp/backlinks/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
   A2Array2D<uint8_t> visited("tmp/visited/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
   A2Array2D<uint8_t> pits("tmp/pits/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
   A2Array2D<bool> endpoint("tmp/endpoint/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
   auto& elevations = dem;
+
+  backlinks.copy_metadata_from(dem);
+  visited.copy_metadata_from(dem);
+  pits.copy_metadata_from(dem);
+  endpoint.copy_metadata_from(dem);
 #endif
 
   endpoint.setAll(false);
@@ -346,12 +355,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
   cout << "Done" << endl;
 
-  // backlinks.copy_metadata_from(dem);
-  // visited.copy_metadata_from(dem);
-  // pits.copy_metadata_from(dem);
-
   std::vector<uint32_t> flood_array;
-  GridCellZk_pq<elev_t> pq;
   ProgressBar progress;
   Timer overall;
 
@@ -360,9 +364,31 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   uint64_t total_pits = 0;
 
   // Seed the priority queue
-  cerr << "Identifying pits and edge cells..." << endl;
+  cerr << "Determining min and max elevation" << endl;
   
   vector<int> hist(1000, 0);
+
+  auto noDataValue = dem.noData();
+  elev_t maxElevation = 0;
+  elev_t minElevation = 0;
+  for (int y = 0; y < dem.height(); y++) {
+    cout << "\r" << (int)(100*(float)(y+1)/dem.height()) << "%" << flush;
+    //dem.print_cache_debug();
+
+    for (int x = 0; x < dem.width(); x++) {
+      auto& elevation = elevations(x, y);
+      if (elevation >= 0 && elevation != noDataValue) {
+        maxElevation = max(maxElevation, elevation);
+        minElevation = min(minElevation, elevation);
+      }
+    }
+  }
+
+  cout << "Elevation ranges: " << minElevation << "..." << maxElevation << endl; 
+
+  cerr << "Identifying pits and edge cells..." << endl;  
+
+  vector<GridCellZk_pq<elev_t>> pqs(elevation2index(maxElevation, minElevation, maxElevation) + 1);
 
   for (int y = 0; y < dem.height(); y++) {
     cout << "\r" << (int)(100*(float)(y+1)/dem.height()) << "%" << flush;
@@ -371,11 +397,11 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
     for (int x = 0; x < dem.width(); x++) {
       auto& elevation = elevations(x, y);
 
-      // if (dem.isNoData(x, y)) // Don't evaluate NoData cells
-      //   continue;
+      if (elevation == noDataValue) // Don't evaluate NoData cells
+        continue;
 
       if (dem.isEdgeCell(x, y)) { // Valid edge cells go on priority-queue
-        pq.emplace(x, y, elevation);
+        pqs[elevation2index(elevation, minElevation, maxElevation)].emplace(x, y, elevation);
         visited(x, y) = LindsayCellType::EDGE;
         continue;
       }
@@ -390,15 +416,16 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
         // No need for an inGrid check here because edge cells are filtered
         // above
 
+        auto nelev = elevations(nx, ny);
         // Cells which can drain into NoData go on priority-queue as edge cells
-        // if (dem.isNoData(nx, ny)) {
-        //   pq.emplace(x, y, elevation);
-        //   visited(x, y) = LindsayCellType::EDGE;
-        //   goto nextcell; // VELOCIRAPTOR
-        // }
+        if (nelev == noDataValue) {
+          pqs[elevation2index(elevation, minElevation, maxElevation)].emplace(x, y, elevation);
+          visited(x, y) = LindsayCellType::EDGE;
+          goto nextcell; // VELOCIRAPTOR
+        }
 
         // Used for identifying the lowest neighbour
-        lowest_neighbour = std::min(elevations(nx, ny), lowest_neighbour);
+        lowest_neighbour = std::min(nelev, lowest_neighbour);
       }
 
       // This is a pit cell if it is lower than any of its neighbours. In this
@@ -435,58 +462,51 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   std::fstream breach_order;
   breach_order.open("breach_order.binary", std::fstream::out | std::fstream::binary);
   
-  while (!pq.empty()) {
-    done++;
-    if ((done % (1024*128)) == 0){
-      cout << "\r" << (int)(( done / (float)(dem.width()*dem.height())) * 100) << "%. Loops done:" << done << flush;
-      //dem.print_cache_debug();
-    }
-    
-    const auto c = pq.top();
-    pq.pop();
-    breach_order.write(reinterpret_cast<const char*>(&c),sizeof(c)); 
+  // std::fstream fout;
+  // fout.open("breach_order.binary", std::ios_base::binary | std::ios_base::out | std::ios::trunc);
+  // boost::iostreams::filtering_ostream breach_order;
+  // breach_order.push(boost::iostreams::zlib_compressor());
+  // breach_order.push(fout);
+  
+  for (int pq_index = 0; pq_index < (int)pqs.size();) {
+    //cout << pq_index << ": " << pq.size() << endl;
+    while (true) {
+      auto& pq = pqs[pq_index];
+      if (pq.empty()) break;
 
-    // This cell is a pit: let's consider doing some breaching
-    if (pits(c.x, c.y)) {
-      // Locate a cell that is lower than the pit cell, or an edge cell
-      //uint32_t pathlen = 0;
-      //auto cc = dem.xyToI(c.x, c.y); // Current cell on the path
-      //elev_t pathdepth = std::numeric_limits<elev_t>::lowest(); // Maximum depth found along the path
-      //elev_t target_height = elevations(c.x, c.y); // Depth to which the cell currently
-                                            // being considered should be carved
+      done++;
+      if ((done % (1024*128)) == 0){
+        cout << "\r" << (int)(( done / (float)(dem.width()*dem.height())) * 100) << "%. Loops done:" << done << " pq index " << pq_index << "/" << pqs.size() << flush;
+        //dem.print_cache_debug();
+      }
+      
+      const auto c = pq.top();
+      int64_t cc = dem.xyToI(c.x, c.y); // Current cell on the path
+      pq.pop();
+      breach_order.write(reinterpret_cast<const char*>(&cc),sizeof(cc)); 
 
-      if (mode == COMPLETE_BREACHING) {
-        //traceback(cc, target_height, eps_gradients, elevations, backlinks, visited, pits, endpoint);
-      } else {
-        assert(false);
-        /*
-        // Trace path back to a cell low enough for the path to drain into it,
-        // or to an edge of the DEM
-        while (cc != NO_BACK_LINK && elevations(cc) >= target_height) {
-          pathdepth = std::max(
-              pathdepth,
-              (elev_t)(elevations(cc) -
-                       target_height)); // Figure out deepest breach necessary
-                                        // on path //TODO: CHeck this for issues
-                                        // with int8_t subtraction overflow
-          cc = backlinks(cc); // Follow path back
-          if (eps_gradients)
-            target_height = std::nextafter(
-                target_height,
-                std::numeric_limits<
-                    elev_t>::lowest()); // Decrease target depth slightly for
-                                        // each cell on path to ensure drainage
-          pathlen++; // Make path longer
-        }
+      // This cell is a pit: let's consider doing some breaching
+      if (pits(c.x, c.y)) {
+        // Locate a cell that is lower than the pit cell, or an edge cell
+        //uint32_t pathlen = 0;
+        //elev_t pathdepth = std::numeric_limits<elev_t>::lowest(); // Maximum depth found along the path
+        //elev_t target_height = elevations(c.x, c.y); // Depth to which the cell currently
+                                              // being considered should be carved
 
-        // Reset current cell address and height to the pit (start of path)
-        cc = dem.xyToI(c.x, c.y);
-        target_height = elevations(c.x, c.y);
-
-        // The path fits within the limits. "Drill, baby, drill."
-        if (pathlen <= maxpathlen && pathdepth <= maxdepth) {
+        if (mode == COMPLETE_BREACHING) {
+          //traceback(cc, target_height, eps_gradients, elevations, backlinks, visited, pits, endpoint);
+        } else {
+          assert(false);
+          /*
+          // Trace path back to a cell low enough for the path to drain into it,
+          // or to an edge of the DEM
           while (cc != NO_BACK_LINK && elevations(cc) >= target_height) {
-            elevations(cc) = target_height;
+            pathdepth = std::max(
+                pathdepth,
+                (elev_t)(elevations(cc) -
+                        target_height)); // Figure out deepest breach necessary
+                                          // on path //TODO: CHeck this for issues
+                                          // with int8_t subtraction overflow
             cc = backlinks(cc); // Follow path back
             if (eps_gradients)
               target_height = std::nextafter(
@@ -494,54 +514,76 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
                   std::numeric_limits<
                       elev_t>::lowest()); // Decrease target depth slightly for
                                           // each cell on path to ensure drainage
+            pathlen++; // Make path longer
           }
-        } else if (mode == CONSTRAINED_BREACHING) { // TODO: Refine this with
-                                                    // regards to the paper
-          elev_t current_height = elevations(cc);
-          while (cc != NO_BACK_LINK && elevations(cc) >= target_height) {
-            if (pathdepth <= maxdepth)
-              elevations(cc) = current_height;
-            else
-              elevations(cc) -= pathdepth;
-            if (eps_gradients)
-              current_height = std::nextafter(
-                  current_height, std::numeric_limits<elev_t>::lowest());
-            cc = backlinks(cc);
-          }
-       }
-       */
+
+          // Reset current cell address and height to the pit (start of path)
+          cc = dem.xyToI(c.x, c.y);
+          target_height = elevations(c.x, c.y);
+
+          // The path fits within the limits. "Drill, baby, drill."
+          if (pathlen <= maxpathlen && pathdepth <= maxdepth) {
+            while (cc != NO_BACK_LINK && elevations(cc) >= target_height) {
+              elevations(cc) = target_height;
+              cc = backlinks(cc); // Follow path back
+              if (eps_gradients)
+                target_height = std::nextafter(
+                    target_height,
+                    std::numeric_limits<
+                        elev_t>::lowest()); // Decrease target depth slightly for
+                                            // each cell on path to ensure drainage
+            }
+          } else if (mode == CONSTRAINED_BREACHING) { // TODO: Refine this with
+                                                      // regards to the paper
+            elev_t current_height = elevations(cc);
+            while (cc != NO_BACK_LINK && elevations(cc) >= target_height) {
+              if (pathdepth <= maxdepth)
+                elevations(cc) = current_height;
+              else
+                elevations(cc) -= pathdepth;
+              if (eps_gradients)
+                current_height = std::nextafter(
+                    current_height, std::numeric_limits<elev_t>::lowest());
+              cc = backlinks(cc);
+            }
+        }
+        */
+        }
+
+        --pits_left;
       }
 
-      --pits_left;
-      if (pits_left == 0){
-        cout << "\r" << (int)(( pits_left / (float)total_pits) * 100) << "%. Loops done:" << done << flush;
-        break;
+      // Looks for neighbours which are either unvisited or pits
+      for (int n = 1; n <= 8; n++) {
+        const int nx = c.x + dx[n];
+        const int ny = c.y + dy[n];
+
+        if (!dem.inGrid(nx, ny))
+          continue;
+        if (visited(nx, ny) != LindsayCellType::UNVISITED)
+          continue;
+
+        const auto elevation = elevations(nx, ny);
+
+        if (elevation == noDataValue)
+          continue;
+
+        // The neighbour is unvisited. Add it to the queue
+        int elevIndex = elevation2index(elevation, minElevation, maxElevation);
+        pqs[elevIndex].emplace(nx, ny, elevation);
+        if (elevIndex < pq_index) pq_index = elevIndex;
+
+        //if (fill_depressions)
+        //  flood_array.emplace_back(dem.xyToI(nx, ny));
+        visited(nx, ny) = LindsayCellType::VISITED;
+        backlinks(nx, ny) = dem.xyToI(c.x, c.y);
+
+        hist[max(0, min((int)hist.size()-1, 500 + (int)(100*(elevation - elevations(c.x, c.y)))))] += 1;
       }
     }
 
-    // Looks for neighbours which are either unvisited or pits
-    for (int n = 1; n <= 8; n++) {
-      const int nx = c.x + dx[n];
-      const int ny = c.y + dy[n];
-
-      if (!dem.inGrid(nx, ny))
-        continue;
-      // if (dem.isNoData(nx, ny))
-      //   continue;
-      if (visited(nx, ny) != LindsayCellType::UNVISITED)
-        continue;
-
-      const auto elevation = elevations(nx, ny);
-
-      // The neighbour is unvisited. Add it to the queue
-      pq.emplace(nx, ny, elevation);
-      //if (fill_depressions)
-      //  flood_array.emplace_back(dem.xyToI(nx, ny));
-      visited(nx, ny) = LindsayCellType::VISITED;
-      backlinks(nx, ny) = dem.xyToI(c.x, c.y);
-
-      hist[max(0, min((int)hist.size()-1, 500 + (int)(elevation - elevations(c.x, c.y))))] += 1;
-    }
+    assert(pqs[pq_index].empty());
+    pq_index++;
   }
 
   cout << "Lengths: " << (len_tot/len_weight) << " " << len_tot << " " << len_weight << endl;
@@ -552,6 +594,12 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
   breach_order.close();
 
+  cerr << "Applying breaching" << endl;
+
+  // This is the first time we actually write to the elevation
+  // Before this we can treat it as read-only
+  dem.cow("tmp/out/");
+
   auto breach_order_read = ifstream("breach_order.binary");
   breach_order_read.seekg(0, std::ios::end);
   uint64_t totalCells = done;
@@ -559,23 +607,25 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   while(done < totalCells) {
     uint64_t remaining = totalCells - done;
     uint64_t toRead = min(remaining, 1024 * (uint64_t)1024);
-    vector<GridCellZk<elev_t>> items = read_backwards<GridCellZk<elev_t>>(breach_order_read, (int)toRead);
+    vector<int64_t> items = read_backwards<int64_t>(breach_order_read, (int)toRead);
     done += toRead;
 
     cout << "\r" << (int)(( done / (float)totalCells) * 100) << "%. Loops done:" << done << flush;
 
-    for (auto c : items) {
-      auto link = backlinks(c.x, c.y);
+    for (auto cc : items) {
+      auto link = backlinks(cc);
       if (link != NO_BACK_LINK) {
-        auto elev = elevations(c.x, c.y);
-        elevations(link) = min(elevations(link), elev);
+        auto elev = elevations(cc);
+        // Ensure the backlink's elevation is strictly lower than this cell's elevation
+        elevations(link) = min(elevations(link), std::nextafter(elev, std::numeric_limits<elev_t>::lowest()));
       }
     }
   }
 
   breach_order_read.close();
 
-  // dem.save_all_tiles();
+  cerr << "Saving all tiles in memory" << endl;
+  dem.save_all_tiles();
   // visited.save_all_tiles();
   // backlinks.save_all_tiles();
   // pits.save_all_tiles();
@@ -610,17 +660,6 @@ int main(int argc, char** argv) {
     cerr << "outpath must include a %f" << endl;
     return 1;
   }
-
-  MemoryMappedGrid<float> dem_copy("elevation.binary", 1024, 1024, 256);
-
-  // auto arr = MemoryMappedGrid<float>(1024*1024, 100*1024, 4096);
-  // arr(500, 500) = 0;
-  // for (int y = 0; y < arr.totalHeight; y++) {
-  //   for (int x = 0; x < arr.totalWidth; x++) {
-  //     arr(x, y) = 1;
-  //   }
-  // }
-  //arr(100* 1024, 1024*1024 - 1) = 10;
 
   assert(string(argv[2]).find_last_of("/") != string::npos);
   assert(string(argv[2]).find("%f") != string::npos);
