@@ -19,7 +19,7 @@ class LRU {
   typedef std::list<T> cachetype; ///< Container used for storage by the cache
   int len;                        ///< Number of items in the cache
   int maxlen;                     ///< Maximum size the cache is allowed to be
-  T   last;                       ///< Copy of the last inserted item. Speeds up insertion. TODO: This'd be better as a pointer
+  T   last = {};                       ///< Copy of the last inserted item. Speeds up insertion. TODO: This'd be better as a pointer
   std::unordered_map<T, typename std::list<T>::iterator> visited; ///< Used for O(1) access to members
 
  public:

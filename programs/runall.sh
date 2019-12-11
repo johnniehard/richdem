@@ -20,7 +20,8 @@ dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "breach starting $dt" | tee runall_log.txt
 rm -rf out_breach
 mkdir out_breach
-breaching.exe ./out_tiler/layout.layout ./out_breach/%f.tif
+#perf record --call-graph=fp 
+time breaching.exe ./out_tiler/layout.layout ./out_breach/%f.tif
 #  | tee tools_log.txt
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 # echo "breach done $dt" >> runall_log.txt

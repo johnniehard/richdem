@@ -31,8 +31,8 @@
 
 //These enable compression in the loadNative() and saveNative() methods
 #ifdef WITH_COMPRESSION
-#include <boost/iostreams/filtering_stream.hpp>
-#include <boost/iostreams/filter/zlib.hpp>
+#include "/usr/include/boost/iostreams/filtering_stream.hpp"
+#include "/usr/include/boost/iostreams/filter/zlib.hpp"
 #endif
 
 namespace richdem {
@@ -281,13 +281,13 @@ class Array2D {
     out.write(reinterpret_cast<const char*>(&num_data_cells), sizeof(i_t));
     out.write(reinterpret_cast<const char*>(&no_data),        sizeof(T  ));
 
-    out.write(reinterpret_cast<const char*>(geotransform.data()), 6*sizeof(double));
-    std::string::size_type projection_size = projection.size();
-    out.write(reinterpret_cast<const char*>(&projection_size), sizeof(std::string::size_type));
-    out.write(reinterpret_cast<const char*>(projection.data()), projection.size()*sizeof(const char));
+    // out.write(reinterpret_cast<const char*>(geotransform.data()), 6*sizeof(double));
+    // std::string::size_type projection_size = projection.size();
+    // out.write(reinterpret_cast<const char*>(&projection_size), sizeof(std::string::size_type));
+    // out.write(reinterpret_cast<const char*>(projection.data()), projection.size()*sizeof(const char));
 
     out.write(reinterpret_cast<const char*>(data.data()), size()*sizeof(T));
-    out.close();
+    //out.close();
   }
 
   ///TODO
@@ -312,13 +312,13 @@ class Array2D {
     in.read(reinterpret_cast<char*>(&view_yoff),      sizeof(xy_t));
     in.read(reinterpret_cast<char*>(&num_data_cells), sizeof(i_t));
     in.read(reinterpret_cast<char*>(&no_data),        sizeof(T  ));
-    geotransform.resize(6);
-    in.read(reinterpret_cast<char*>(geotransform.data()), 6*sizeof(double));
+    // geotransform.resize(6);
+    // in.read(reinterpret_cast<char*>(geotransform.data()), 6*sizeof(double));
 
-    std::string::size_type projection_size;
-    in.read(reinterpret_cast<char*>(&projection_size), sizeof(std::string::size_type));
-    projection.resize(projection_size,' ');
-    in.read(reinterpret_cast<char*>(&projection[0]), projection.size()*sizeof(char));
+    // std::string::size_type projection_size;
+    // in.read(reinterpret_cast<char*>(&projection_size), sizeof(std::string::size_type));
+    // projection.resize(projection_size,' ');
+    // in.read(reinterpret_cast<char*>(&projection[0]), projection.size()*sizeof(char));
 
     if(load_data){
       resize(view_width,view_height);

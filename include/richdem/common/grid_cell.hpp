@@ -85,11 +85,8 @@ class GridCellZk : public GridCellZ<elev_t> {
     // bool operator< (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z< a.z || ( GridCellZ<elev_t>::isnan() && !a.isnan()) || (GridCellZ<elev_t>::z==a.z && k<a.k) || (GridCellZ<elev_t>::isnan() && a.isnan() && k<a.k); }
     // bool operator> (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z> a.z || (!GridCellZ<elev_t>::isnan() &&  a.isnan()) || (GridCellZ<elev_t>::z==a.z && k>a.k) || (GridCellZ<elev_t>::isnan() && a.isnan() && k>a.k); }
 
-    // bool operator< (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z < a.z || (GridCellZ<elev_t>::z==a.z && k<a.k); }
-    // bool operator> (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z > a.z || (GridCellZ<elev_t>::z == a.z && k>a.k); }
-
-    bool operator< (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z < a.z || (GridCellZ<elev_t>::z==a.z && GridCellZ<elev_t>::x<a.x); }
-    bool operator> (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z > a.z || (GridCellZ<elev_t>::z == a.z && GridCellZ<elev_t>::x>a.x); }
+    bool operator< (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z < a.z || (GridCellZ<elev_t>::z==a.z && k<a.k); }
+    bool operator> (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z > a.z || (GridCellZ<elev_t>::z == a.z && k>a.k); }
 };
 
 
@@ -112,6 +109,39 @@ class GridCellZk_pq : public std::priority_queue<GridCellZk<T>, std::vector< Gri
   }
   void emplace(int x, int y, T z){
     std::priority_queue<GridCellZk<T>, std::vector< GridCellZk<T> >, std::greater<GridCellZk<T> > >::emplace(x,y,z,++count);
+  }
+};
+
+///@brief Stores the (x,y,z) coordinates of a grid cell and a priority indicator k; used by \ref GridCellZk_pq.
+template<class elev_t>
+class GridCellZkB {
+  public:
+    elev_t z;
+    int x, y;
+    uint32_t k;           ///< Used to store an integer to make sorting stable
+    int backlink_dir;
+
+    GridCellZkB(int x, int y, elev_t z, uint32_t k, int backlink_dir): z(z), x(x), y(y), k(k), backlink_dir(backlink_dir) {}
+    GridCellZkB(){}
+    //TODO: Is it possible to do this relying on inheriting the std::isnan checks from the GridCellZ specialization?
+    // bool operator< (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z< a.z || ( GridCellZ<elev_t>::isnan() && !a.isnan()) || (GridCellZ<elev_t>::z==a.z && k<a.k) || (GridCellZ<elev_t>::isnan() && a.isnan() && k<a.k); }
+    // bool operator> (const GridCellZk<elev_t>& a) const { return GridCellZ<elev_t>::z> a.z || (!GridCellZ<elev_t>::isnan() &&  a.isnan()) || (GridCellZ<elev_t>::z==a.z && k>a.k) || (GridCellZ<elev_t>::isnan() && a.isnan() && k>a.k); }
+
+    bool operator< (const GridCellZkB<elev_t>& a) const { return z < a.z || (z==a.z && k<a.k); }
+    bool operator> (const GridCellZkB<elev_t>& a) const { return z > a.z || (z == a.z && k>a.k); }
+};
+
+///@brief A priority queue of GridCellZkB, sorted by ascending height or, if heights are equal, by the order of insertion.
+template<typename T>
+class GridCellZkB_pq : public std::priority_queue<GridCellZkB<T>, std::vector< GridCellZkB<T> >, std::greater<GridCellZkB<T> > > {
+ private:
+  uint32_t count = 0;
+ public:
+  void push(){ //TODO: Is there a way to stop compilation, but only if this function is used
+    throw std::runtime_error("push() to GridCellZk_pq is not allowed!");
+  }
+  void emplace(int x, int y, T z, int backlink_dir){
+    std::priority_queue<GridCellZkB<T>, std::vector< GridCellZkB<T> >, std::greater<GridCellZkB<T> > >::emplace(x, y, z, ++count, backlink_dir);
   }
 };
 

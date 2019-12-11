@@ -79,7 +79,7 @@ class A2Array2D {
     bool do_set_all        = false; //If true, then set all to 'set_all_val' when tile is loaded
     int create_with_width  = -1;
     int create_with_height = -1;
-    T set_all_val          = 0;
+    T set_all_val          = {};
     void lazySetAll(){
       if(do_set_all){
         do_set_all = false;
@@ -125,10 +125,10 @@ class A2Array2D {
       tile.loadData();
       tile.printStamp(5,"Tile load, before reorientating"); //Print stamp before reorientating since this must match parallel_pf.exe
       if(readonly){
-        if((tile.geotransform[1]<0) ^ flipH)
-          tile.flipHorz();
-        if((tile.geotransform[5]>0) ^ flipV)
-          tile.flipVert();
+        // if((tile.geotransform[1]<0) ^ flipH)
+        //   tile.flipHorz();
+        // if((tile.geotransform[5]>0) ^ flipV)
+        //   tile.flipVert();
       }
       tile.printStamp(5,"Tile load, after reorientating"); //Print stamp before reorientating since this must match parallel_pf.exe
     } else {
@@ -158,6 +158,14 @@ class A2Array2D {
     }
   }
 
+  void setReadonly(bool readonly) {
+    if (readonly && !this->readonly) {
+      // Save all potentially modified tiles before marking it as readonly
+      save_all_tiles();
+    }
+    this->readonly = readonly;
+  }
+
   void pop_from_lru() {
     auto tile_to_unload = lru.back();
 
@@ -179,6 +187,10 @@ class A2Array2D {
 
   void save_all_tiles() {
     while(lru.size() > 0) pop_from_lru();
+  }
+
+  T noData() const {
+    return data[0][0].noData();
   }
 
   void cow(std::string prefix) {
@@ -450,6 +462,12 @@ class A2Array2D {
     int32_t tile_y = y >> per_tile_height_log2;
     x = x & (per_tile_width - 1);
     y = y & (per_tile_height - 1);
+
+    // Fast path
+    if (data[tile_y][tile_x].loaded) {
+      lru.insert(&data[tile_y][tile_x]);
+      return data[tile_y][tile_x](x,y);
+    }
 
     if(isNullTile(tile_x,tile_y)){
       no_data_to_set = data[tile_y][tile_x].noData();
