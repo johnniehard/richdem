@@ -254,7 +254,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
       int64_t backlink = c.backlink_dir == 0 ? NO_BACK_LINK : dem.xyToI(c.x + dx[c.backlink_dir], c.y + dy[c.backlink_dir]);
       breach_order_buffer.push_back({cc, backlink});
       if (breach_order_buffer.size() >= 1024*1024) {
-        breach_order.write(reinterpret_cast<const char*>(breach_order_buffer.data()),breach_order_buffer.size() * sizeof(int64_t));
+        breach_order.write(reinterpret_cast<const char*>(breach_order_buffer.data()),breach_order_buffer.size() * sizeof(pair<int64_t, int64_t>));
         breach_order_buffer.clear();
       }
 
@@ -295,7 +295,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   cout << endl;
 
   // Write remaining items
-  breach_order.write(reinterpret_cast<const char*>(breach_order_buffer.data()),breach_order_buffer.size() * sizeof(int64_t));
+  breach_order.write(reinterpret_cast<const char*>(breach_order_buffer.data()),breach_order_buffer.size() * sizeof(pair<int64_t, int64_t>));
   breach_order_buffer.clear();
   breach_order.close();
 
