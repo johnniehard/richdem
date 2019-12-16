@@ -39,7 +39,8 @@ dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "accum starting $dt" >> runall_log.txt
 rm -rf out_accum
 mkdir out_accum
-mpirun -n 3 xterm -e lldb parallel_d8_accum.exe many @evict ./out_flatres/layout.layout ./out_accum/%n.tif
+# mpirun -n 3 xterm -e lldb parallel_d8_accum.exe many @evict ./out_flatres/layout.layout ./out_accum/%n.tif
+mpirun -n 3 parallel_d8_accum.exe many @evict ./out_flatres/layout.layout ./out_accum/%n.tif
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "accum done $dt" >> runall_log.txt
 
