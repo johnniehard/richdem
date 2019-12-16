@@ -347,7 +347,7 @@ int main(int argc, char** argv) {
   assert(string(argv[2]).find_last_of("/") != string::npos);
   assert(string(argv[2]).find("%f") != string::npos);
 
-  int cache_size = 8000;
+  int cache_size = 16000;
   cout << "Reading tile metadata..." << flush;
   A2Array2D<float> dem(argv[1], cache_size);
   cout << " done" << endl;
