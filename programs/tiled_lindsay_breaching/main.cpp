@@ -159,6 +159,10 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   vector<GridCellZkB_pq<elev_t>> pqs(elevation2index(maxElevation, minElevation, maxElevation) + 1);
   uint64_t markedAsVisited = 0;
 
+  // This is the first time we actually write to the elevation
+  // Before this we can treat it as read-only
+  dem.cow("tmp/out/");
+
   for (int y = 0; y < dem.height(); y++) {
     cout << "\r" << (int)(100*(double)(y+1)/dem.height()) << "%" << flush;
     //dem.print_cache_debug();
@@ -205,13 +209,13 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
       // case: raise the cell to be just lower than its lowest neighbour. This
       // makes the breaching/tunneling procedures work better.
       // TODO: Include?
-      /*if (elevation < lowest_neighbour) {
+      if (elevation < lowest_neighbour) {
         if (eps_gradients)
           elevation = std::nextafter(lowest_neighbour,
                                      std::numeric_limits<elev_t>::lowest());
         else
           elevation = lowest_neighbour;
-      }*/
+      }
 
       // Since depressions might have flat bottoms, we treat flats as pits. Mark
       // flat/pits as such now.
@@ -226,7 +230,10 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   cout << endl;
 
   // Since dem is read only right now, this will just discard the cache to let us save some memory
-  dem.save_all_tiles();
+  // dem.save_all_tiles();
+
+  // Mark as readonly to save IO bandwidth
+  dem.setReadonly(true);
 
   // The Priority-Flood operation assures that we reach pit cells by passing
   // into depressions over the outlet of minimal elevation on their edge.
@@ -299,11 +306,10 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   breach_order_buffer.clear();
   breach_order.close();
 
-  cerr << "Applying breaching" << endl;
+  // We will write to dem in the loop below. So we mark it as not readonly anymore
+  dem.setReadonly(false);
 
-  // This is the first time we actually write to the elevation
-  // Before this we can treat it as read-only
-  dem.cow("tmp/out/");
+  cerr << "Applying breaching" << endl;
 
   auto breach_order_read = ifstream("breach_order.binary");
   breach_order_read.seekg(0, std::ios::end);
