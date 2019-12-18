@@ -73,12 +73,12 @@ enum LindsayCellType { UNVISITED, VISITED, EDGE };
 const uint32_t NO_BACK_LINK = std::numeric_limits<uint32_t>::max();
 
 template <class T>
-std::vector<T> read_backwards(std::istream &is, int size) {
+std::vector<T> read_backwards(std::istream &is, int64_t offset, int size) {
     std::vector<T> buffer;
 
     buffer.resize(size);
 
-    is.seekg(-size * sizeof(T), std::ios::cur);
+    is.seekg(offset);
     is.read((char*)&buffer[0], size * sizeof(T));
     std::reverse(buffer.begin(), buffer.end());
     return buffer;
@@ -312,7 +312,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   while(done < totalCells) {
     uint64_t remaining = totalCells - done;
     uint64_t toRead = min(remaining, 1024 * (uint64_t)1024);
-    vector<pair<int64_t, int64_t>> items = read_backwards<pair<int64_t, int64_t>>(breach_order_read, (int)toRead);
+    vector<pair<int64_t, int64_t>> items = read_backwards<pair<int64_t, int64_t>>(breach_order_read, (int64_t)(remaining - toRead) * sizeof(pair<int64_t, int64_t>), (int)toRead);
     done += toRead;
 
     cout << "\r" << (int)(( done / (float)totalCells) * 100) << "%. Loops done:" << done << flush;
@@ -337,6 +337,9 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 } // namespace richdem
 
 int main(int argc, char** argv) {
+  // Make sure large file support is enabled
+  // Otherwise we will may get bugs when we process files larger than about 2GB
+  assert(numeric_limits<streamoff>::max() >= numeric_limits<int64_t>::max());
 
   if (argc != 3) {
     cerr << "Usage: ./breaching layoutfile outpath" << endl;
