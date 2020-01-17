@@ -152,18 +152,10 @@ Bounds traceContour(A2Array2D<bool> &watershed, Point pour_point, const vector<d
 
     Point bc = boundary_cells[i];
 
-    if(bc.x < bounds.min.x){
-      bounds.min.x = bc.x;
-    }
-    if(bc.y < bounds.min.y){
-      bounds.min.y = bc.y;
-    }
-    if(bc.x > bounds.max.x){
-      bounds.max.x = bc.x;
-    }
-    if(bc.y > bounds.max.y){
-      bounds.max.y = bc.y;
-    }
+    bounds.min.x = min(bounds.min.x,bc.x/2);
+    bounds.min.y = min(bounds.min.y,bc.y/2);
+    bounds.max.x = max(bounds.max.x,(bc.x+1)/2);
+    bounds.max.y = max(bounds.max.y,(bc.y+1)/2);
 
     float geo_x = tr[0] + bc.x * tr[1] + bc.y * tr[2];
     float geo_y = tr[3] + bc.x * tr[4] + bc.y * tr[5];
