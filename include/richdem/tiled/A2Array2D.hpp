@@ -154,6 +154,7 @@ class A2Array2D {
         data[ty][tx].geotransform = other.data[ty][tx].geotransform;
         data[ty][tx].projection = other.data[ty][tx].projection;
         data[ty][tx].metadata = other.data[ty][tx].metadata;
+        data[ty][tx].basename = other.data[ty][tx].basename;
       }
     }
   }
