@@ -53,7 +53,7 @@ const int dx4[4] = { 1, 0, -1, 0 };
 const int dy4[4] = { 0, 1, 0, -1 };
 
 // Moore neighbourhood boundary tracing
-Bounds traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double> transform){
+Bounds traceContour(A2Array2D<bool> &watershed, Point pour_point, const vector<double>& transform) {
 
   // define list of points
   vector<Point> boundary_cells;
@@ -141,10 +141,11 @@ Bounds traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double>
   Bounds bounds = Bounds(Point(INT_MAX, INT_MAX), Point(INT_MIN, INT_MIN));
   
   // Compensate for the doubling of coordinates mentioned above
-  transform[1] *= 0.5f;
-  transform[4] *= 0.5f;
-  transform[2] *= 0.5f;
-  transform[5] *= 0.5f;
+  auto tr = transform;
+  tr[1] *= 0.5f;
+  tr[4] *= 0.5f;
+  tr[2] *= 0.5f;
+  tr[5] *= 0.5f;
   
   cout << "x, y" << endl;
   for(size_t i=0; i < boundary_cells.size(); i++){
@@ -164,8 +165,8 @@ Bounds traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double>
       bounds.max.y = bc.y;
     }
 
-    float geo_x = transform[0] + bc.x * transform[1] + bc.y * transform[2];
-    float geo_y = transform[3] + bc.x * transform[4] + bc.y * transform[5];
+    float geo_x = tr[0] + bc.x * tr[1] + bc.y * tr[2];
+    float geo_y = tr[3] + bc.x * tr[4] + bc.y * tr[5];
 
     cout << fixed << setprecision(1) << geo_x << ", " << geo_y << endl;
   }
