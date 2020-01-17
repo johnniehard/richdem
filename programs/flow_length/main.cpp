@@ -10,7 +10,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "external_sort/external_sort.hpp"
 
 using namespace std;
 using namespace richdem;
@@ -21,79 +20,11 @@ using namespace richdem;
 //to indicate NoData. Therefore, uint8_t is appropriate.
 typedef uint8_t flowdir_t;
 
-struct Node {
-    int x, y;
-    float height;
-    flowdir_t dir;
-
-    bool operator< (const Node& other) const {
-        return other.height < height;
-    }
-};
-
-A2Array2D<int> calculate_flow(A2Array2D<flowdir_t> &directions, int cache_size) {
-    /*std::fstream node_order;
-    node_order.open("node_order.binary", std::fstream::out | std::fstream::binary);
-    vector<Node> buffer;
-
-    for (int y = 0; y < dem.height(); y++) {
-        cout << "\r" << (int)(100*(float)(y+1)/dem.height()) << "%" << flush;
-
-        for (int x = 0; x < dem.width(); x++) {
-            auto& elevation = dem(x, y);
-            auto& dir = directions(x, y);
-            if (dir == 0) continue;
-            if (!isfinite(elevation)) continue;
-
-            Node node;
-            node.x = x;
-            node.y = y;
-            node.height = elevation;//y*dem.width() + x;
-            node.dir = dir;
-            buffer.push_back(node);
-            
-            if (buffer.size() >= 1024*1024) {
-                node_order.write(reinterpret_cast<const char*>(buffer.data()), buffer.size() * sizeof(Node));
-                buffer.clear();
-            }
-        }
-    }
-
-    node_order.write(reinterpret_cast<const char*>(buffer.data()), buffer.size() * sizeof(Node));
-    buffer.clear();
-    node_order.close();
-
-    // set split and merge parameters
-    external_sort::SplitParams sp;
-    external_sort::MergeParams mp;
-    sp.mem.size = 10;
-    sp.mem.unit = external_sort::MB;
-    mp.mem = sp.mem;
-    sp.spl.ifile = "node_order.binary";
-    mp.mrg.ofile = "node_order_sorted.binary";
-
-    using ValueType = Node;
-
-    // run external sort
-    external_sort::sort<ValueType>(sp, mp);
-
-    if (sp.err.none && mp.err.none) {
-        std::cout << "File sorted successfully!" << std::endl;
-    } else {
-        std::cout << "External sort failed!" << std::endl;
-        if (sp.err) {
-            std::cout << "Split failed: " << sp.err.msg() << std::endl;
-        } else {
-            std::cout << "Merge failed: " << mp.err.msg() << std::endl;
-        }
-    }*/
-
-    // node_order.open("node_order.binary", std::fstream::out | std::fstream::binary);
-    // vector<Node> buffer;
-
+A2Array2D<float> calculate_flow(A2Array2D<flowdir_t> &directions, int cache_size) {
     A2Array2D<int> in_count("tmp/in_count/", directions.stdTileWidth(), directions.stdTileHeight(), directions.widthInTiles(), directions.heightInTiles(), cache_size);
     in_count.setAll(0);
 
+    cout << "Counting arrows pointing in" << endl;
     for (int y = 0; y < directions.height(); y++) {
         cout << "\r" << (int)(100*(float)(y+1)/directions.height()) << "%" << flush;
 
@@ -106,6 +37,8 @@ A2Array2D<int> calculate_flow(A2Array2D<flowdir_t> &directions, int cache_size) 
         }
     }
 
+    cout << endl;
+    cout << "Checking for leaf nodes" << endl;
     queue<tuple<int,int>> que;
     for (int y = 0; y < directions.height(); y++) {
         cout << "\r" << (int)(100*(float)(y+1)/directions.height()) << "%" << flush;
@@ -115,12 +48,25 @@ A2Array2D<int> calculate_flow(A2Array2D<flowdir_t> &directions, int cache_size) 
         }
     }
 
-    A2Array2D<int> flow_lengths("tmp/flow_length/", directions.stdTileWidth(), directions.stdTileHeight(), directions.widthInTiles(), directions.heightInTiles(), cache_size);
+    cout << endl;
+    cout << "Calculating flow lengths" << endl;
+    A2Array2D<float> flow_lengths("tmp/flow_length/", directions.stdTileWidth(), directions.stdTileHeight(), directions.widthInTiles(), directions.heightInTiles(), cache_size);
     flow_lengths.copy_metadata_from(directions);
-    flow_lengths.setAll(1);
+    flow_lengths.setAll(0);
 
-    int record = 0;
+    float pixelSize = directions.getCellLength();
+
+    float diagLength = sqrt(2.0f) * pixelSize;
+    float straightLength = pixelSize;
+
+    float record = 0;
+    int64_t done = 0;
     while(!que.empty()) {
+        done++;
+        if ((done % (1024*128)) == 0){
+            cout << "\r" << (int)(( done / (double)((int64_t)directions.width()*directions.height())) * 100) << "%. Loops done:" << done << flush;
+        }
+        
         int x, y;
         tie(x, y) = que.front();
         que.pop();
@@ -131,80 +77,43 @@ A2Array2D<int> calculate_flow(A2Array2D<flowdir_t> &directions, int cache_size) 
 
         auto current = flow_lengths(x, y);
         auto& next = flow_lengths(nx, ny);
-        next = max(next, current + 1);
+        float step_distance = n_diag[dir] ? diagLength : straightLength;
+        next = max(next, current + step_distance);
         record = max(next, record);
         auto& next_in = in_count(nx, ny);
         next_in--;
         if (next_in == 0) que.push({nx, ny});
     }
 
-    /*
-    auto node_order_sorted = ifstream("node_order_sorted.binary", std::fstream::binary);
-    std::vector<Node> node_read_buffer(1024*1024);
-
-    dem.save_all_tiles();
-    directions.save_all_tiles();
-
-    A2Array2D<int> flow_lengths("tmp/flow_length/", dem.stdTileWidth(), dem.stdTileHeight(), dem.widthInTiles(), dem.heightInTiles(), cache_size);
-    flow_lengths.copy_metadata_from(dem);
-    flow_lengths.setAll(1);
-
-    cout << " Total size " << dem.width() << " " << dem.height() << endl;
-    int record = 0;
-    do {
-        node_order_sorted.read((char*)node_read_buffer.data(), node_read_buffer.size() * sizeof(Node));
-
-        cout << "Read " << node_order_sorted.gcount() << " bytes (" << (node_order_sorted.gcount() / sizeof(Node)) << " elements)" << endl;
-        node_read_buffer.resize(node_order_sorted.gcount() / sizeof(Node));
-        for (auto node : node_read_buffer) {
-            // cout << node.height << endl;
-            if (!flow_lengths.inGrid(node.x + dx[node.dir], node.y + dy[node.dir])) {
-                // SKipping flow out of grid
-                continue;
-            }
-            if (dem(node.x, node.y) <= dem(node.x + dx[node.dir], node.y + dy[node.dir])) {
-                cout << "Invalid sort " << dem(node.x, node.y) << " " << dem(node.x + dx[node.dir], node.y + dy[node.dir]) << endl;
-            }
-            assert(dem(node.x, node.y) >= dem(node.x + dx[node.dir], node.y + dy[node.dir]));
-            auto current = flow_lengths(node.x, node.y);
-            auto& next = flow_lengths(node.x + dx[node.dir], node.y + dy[node.dir]);
-            next = max(next, current + 1);
-            record = max(next, record);
-        }
-    } while(node_order_sorted);
-    node_order_sorted.close();
-    */
-
+    cout << endl;
     cout << "Record length is " << record << endl;
     return flow_lengths;
 }
 
 int main (int argc, char** argv) {
-    if (argc != 4) {
-        cerr << "Usage: ./flow_length layoutfile_dem layoutfile_directions outpath" << endl;
+    if (argc != 3) {
+        cerr << "Usage: ./flow_length layoutfile_directions outpath" << endl;
         cerr << "outpath must include a %f" << endl;
         return 1;
     }
 
-    assert(string(argv[3]).find_last_of("/") != string::npos);
-    assert(string(argv[3]).find("%f") != string::npos);
+    assert(string(argv[2]).find_last_of("/") != string::npos);
+    assert(string(argv[2]).find("%f") != string::npos);
 
     int cache_size = 16000*6;
-    // cout << "Reading tile metadata..." << flush;
-    // A2Array2D<float> dem(argv[1], cache_size);
-    // cout << " done" << endl;
 
     cout << "Reading tile metadata..." << flush;
-    A2Array2D<flowdir_t> directions(argv[2], cache_size);
+    A2Array2D<flowdir_t> directions(argv[1], cache_size);
     cout << " done" << endl;
 
-    A2Array2D<int> output = calculate_flow(directions, cache_size);
+    auto output = calculate_flow(directions, cache_size);
 
-    auto foldername = string(argv[3]).substr(0, string(argv[3]).find_last_of("/")).c_str();
+    auto foldername = string(argv[2]).substr(0, string(argv[2]).find_last_of("/")).c_str();
     mkdir(foldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     cout << "Saving final output" << endl;
-    output.saveGDAL(argv[3]);
-    cout << "Saving unified gdal" << endl;
+    output.saveGDAL(argv[2]);
+
+    cout << "Saving unified gdal (only for debug)" << endl;
     output.saveUnifiedGDAL("flow_length.gdal");
     
     return 0;

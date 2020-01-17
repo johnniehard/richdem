@@ -705,6 +705,19 @@ class A2Array2D {
         tile.setNoData(ndval);
   }
 
+  double getCellLength() const {
+    float pixelSize = data[0][0].getCellLengthX();
+    if (pixelSize != data[0][0].getCellLengthY()) {
+        std::cerr << "Pixels must be square!" << std::endl;
+        exit(1);
+    }
+    if (data[0].size() > 0 && pixelSize != data[0][1].getCellLengthY()) {
+        std::cerr << "Pixels must have the same size in all tiles" << std::endl;
+        exit(1);
+    }
+    return pixelSize;
+  }
+
   int32_t getEvictions() const {
     return evictions;
   }

@@ -12,7 +12,7 @@ dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "tiler starting $dt" | tee -a runall_log.txt
 rm -rf out_tiler
 mkdir out_tiler
-~/Documents/flodesapp/richdem/programs/tiler/tiler.exe 256 256 $INPUT_DEM ./out_tiler/%n.tif
+~/Documents/flodesapp/richdem/programs/tiler/tiler.exe 64 64 $INPUT_DEM ./out_tiler/%n.tif
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "tiler done $dt" | tee -a runall_log.txt
 
@@ -34,6 +34,16 @@ mkdir out_flatres_tmp
 ~/Documents/flodesapp/richdem/programs/tiled_flat_resolution/parallel_flats.exe ./out_breach/layout.layout 20000 ./out_flatres_tmp/%f.tif ./out_flatres/%f.tif noflip
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "flatres done $dt" | tee -a runall_log.txt
+
+dt=$(date '+%d/%m/%Y %H:%M:%S')
+echo "flow_length starting $dt" | tee -a runall_log.txt
+rm -rf out_flow_length
+mkdir out_flow_length
+rm -rf out_flow_length_tmp
+mkdir out_flow_length_tmp
+~/Documents/flodesapp/richdem/programs/flow_length/flow_length.exe ./out_breach/layout.layout ./out_flow_length/%f.tif
+dt=$(date '+%d/%m/%Y %H:%M:%S')
+echo "flow_length done $dt" | tee -a runall_log.txt
 
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "accum starting $dt" | tee -a runall_log.txt
