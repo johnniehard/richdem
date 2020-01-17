@@ -27,6 +27,14 @@ bool operator==(const Point& lhs, const Point& rhs)
 {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 };
+Point operator+(const Point& lhs, const Point& rhs)
+{
+    return Point(lhs.x + rhs.x, lhs.y + rhs.y);
+};
+Point operator-(const Point& lhs, const Point& rhs)
+{
+    return Point(lhs.x - rhs.x, lhs.y - rhs.y);
+};
 
 struct Bounds {
   Point min, max;
@@ -41,28 +49,62 @@ Point turn(Point v, float rad){
     return Point((int)x, (int)y);
 }
 
+const int dx4[4] = { 1, 0, -1, 0 };
+const int dy4[4] = { 0, 1, 0, -1 };
+
 // Moore neighbourhood boundary tracing
 Bounds traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double> transform){
 
   // define list of points
   vector<Point> boundary_cells;
 
-  // add starting point to list
-  boundary_cells.push_back(pour_point);
-
   // set starting point as current cell
   Point cell = pour_point;
 
-  Point start_dir = Point(0, 0);
+  int start_dir = -1;
   // check all neighbours to find empty cell, start towards that cell
-  for(int i = 1; i <= 8; i+=2){
-    Point nc = Point(cell.x + dx[i], cell.y + dy[i]);
+  for(int i = 0; i < 4; i++){
+    Point nc = Point(cell.x + dx4[i], cell.y + dy4[i]);
     if(!watershed(nc.x, nc.y)){
-      start_dir = Point(dx[i], dy[i]);
+      start_dir = i;
     }
   }
-  Point dir = start_dir;
+  assert(start_dir != -1);
+  int dir = start_dir;
 
+  // To be able to represent points in-between tiles we double all coordinates
+  cell = Point(cell.x*2, cell.y*2);
+  cell = cell + Point(dx4[dir], dy4[dir]) + Point(dx4[(dir-1+4)%4], dy4[(dir-1+4)%4]);
+  auto start_point = cell;
+  dir = (dir+1) % 4;
+
+  int count = 0;
+  while(true) {
+    if (cell == start_point && count > 0) {
+      break;
+    }
+    count++;
+
+    auto left = (dir + 1) % 4;
+    auto right = (dir - 1 + 4) % 4;
+
+    auto front_left = cell + Point(dx4[dir], dy4[dir]) + Point(dx4[left], dy4[left]);
+    auto front_right = cell + Point(dx4[dir], dy4[dir]) + Point(dx4[right], dy4[right]);
+
+    auto vleft = watershed(front_left.x/2, front_left.y/2);
+    auto vright = watershed(front_right.x/2, front_right.y/2);
+
+    if (vleft && !vright) {
+      // Move forwards
+      boundary_cells.push_back(cell);
+      cell = cell + Point(dx4[dir]*2, dy4[dir]*2);
+    } else if (vright) {
+      dir = (dir - 1 + 4) % 4;
+    } else {
+      dir = (dir + 1) % 4;
+    }
+  }
+  /*
   int count = 0;
   while(true){
     // Stopping criteria, stop when reaching start cell for second time
@@ -94,10 +136,16 @@ Bounds traceContour(A2Array2D<bool> &watershed, Point pour_point, vector<double>
       }
     }
 
-  }
+  }*/
 
   Bounds bounds = Bounds(Point(INT_MAX, INT_MAX), Point(INT_MIN, INT_MIN));
- 
+  
+  // Compensate for the doubling of coordinates mentioned above
+  transform[1] *= 0.5f;
+  transform[4] *= 0.5f;
+  transform[2] *= 0.5f;
+  transform[5] *= 0.5f;
+  
   cout << "x, y" << endl;
   for(size_t i=0; i < boundary_cells.size(); i++){
 
