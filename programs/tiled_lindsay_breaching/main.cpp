@@ -250,7 +250,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   uint64_t done = 0;
 
   std::fstream breach_order;
-  breach_order.open("breach_order.binary", std::fstream::out | std::fstream::binary);
+  breach_order.open("/tmp/breach_order.binary", std::fstream::out | std::fstream::binary);
   
   vector<pair<int64_t, int64_t>> breach_order_buffer;
   for (int pq_index = 0; pq_index < (int)pqs.size();) {
@@ -320,7 +320,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
   cerr << "Applying breaching" << endl;
 
-  auto breach_order_read = ifstream("breach_order.binary");
+  auto breach_order_read = ifstream("/tmp/breach_order.binary");
   breach_order_read.seekg(0, std::ios::end);
   uint64_t totalCells = done;
   done = 0;
