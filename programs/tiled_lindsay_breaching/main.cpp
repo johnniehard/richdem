@@ -94,7 +94,7 @@ template <class elev_t>
 void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
                  bool fill_depressions, uint32_t maxpathlen, elev_t maxdepth, int cache_size) {
   cerr << "Starting" << endl;
-
+  assert(dem.isReadonly());
 
   // Move cursor to top left of screen
   std::cout << "\033[0;0;H";
@@ -112,13 +112,38 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   mkdir("tmp", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   mkdir("tmp/out", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   mkdir("tmp/elevations", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  mkdir("tmp/elevations2", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
   A2Array2D<float> elevations("tmp/elevations/", dem.stdTileWidth()/4, dem.stdTileHeight()/4, dem.widthInTiles()*4, dem.heightInTiles()*4, cache_size*4*4);
+  A2Array2D<float> elevations2("tmp/elevations2/", dem.stdTileWidth()/4, dem.stdTileHeight()/4, dem.widthInTiles()*4, dem.heightInTiles()*4, cache_size*4*4);
   
   for (int y = 0; y < elevations.height(); y++) {
-    cout << "\rCopying to native " << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
+    cout << "\rCopying to native (1 of 2) " << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
     for (int x = 0;x < elevations.width(); x++) {
-      elevations(x, y) = dem(x,y);
+      auto elevation = dem(x,y);
+      elevations(x, y) = elevation;
+    }
+  }
+
+  // Clear memory usage
+  dem.save_all_tiles();
+
+  cerr << "Determining min and max elevation" << endl;
+
+  auto noDataValue = dem.noData();
+  elev_t minElevation = 0;
+  elev_t maxElevation = 0;
+
+  for (int y = 0; y < elevations.height(); y++) {
+    cout << "\rCopying to native (2 of 2)" << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
+    for (int x = 0;x < elevations.width(); x++) {
+      auto elevation = dem(x,y);
+      elevations2(x, y) = elevations(x, y) = elevation;
+
+      if (elevation >= 0 && elevation != noDataValue) {
+        maxElevation = max(maxElevation, elevation);
+        minElevation = min(minElevation, elevation);
+      }
     }
   }
   cout << endl;
@@ -129,27 +154,14 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   ProgressBar progress;
   Timer overall;
 
+  // Save memory and performance while running breaching
+  elevations2.setReadonly(true);
+
   overall.start();
 
   uint64_t total_pits = 0;
 
   // Seed the priority queue
-  cerr << "Determining min and max elevation" << endl;
-
-  auto noDataValue = dem.noData();
-  elev_t minElevation = 0;
-  elev_t maxElevation = 0;
-  for (int y = 0; y < dem.height(); y++) {
-    cout << "\r" << (int)(100*(float)(y+1)/dem.height()) << "%" << flush;
-
-    for (int x = 0; x < dem.width(); x++) {
-      auto& elevation = elevations(x, y);
-      if (elevation >= 0 && elevation != noDataValue) {
-        maxElevation = max(maxElevation, elevation);
-        minElevation = min(minElevation, elevation);
-      }
-    }
-  }
 
   cout << "Elevation ranges: " << minElevation << "..." << maxElevation << endl; 
 
@@ -159,16 +171,12 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   vector<GridCellZkB_pq<elev_t>> pqs(elevation2index(maxElevation, minElevation, maxElevation) + 1);
   uint64_t markedAsVisited = 0;
 
-  // This is the first time we actually write to the elevation
-  // Before this we can treat it as read-only
-  dem.cow("tmp/out/");
-
   for (int y = 0; y < dem.height(); y++) {
     cout << "\r" << (int)(100*(double)(y+1)/dem.height()) << "%" << flush;
     //dem.print_cache_debug();
 
     for (int x = 0; x < dem.width(); x++) {
-      auto& elevation = dem(x, y);
+      auto& elevation = elevations2(x, y);
 
       if (elevation == noDataValue) // Don't evaluate NoData cells
         continue;
@@ -192,7 +200,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
         // No need for an inGrid check here because edge cells are filtered above
 
-        auto nelev = dem(nx, ny);
+        auto nelev = elevations2(nx, ny);
         // Cells which can drain into NoData go on priority-queue as edge cells
         if (nelev == noDataValue) {
           pqs[elevation2index(elevation, minElevation, maxElevation)].emplace(x, y, elevation, 0);
@@ -233,7 +241,8 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   // dem.save_all_tiles();
 
   // Mark as readonly to save IO bandwidth
-  dem.setReadonly(true);
+  //dem.save_all_tiles();
+  assert(dem.isReadonly());
 
   // The Priority-Flood operation assures that we reach pit cells by passing
   // into depressions over the outlet of minimal elevation on their edge.
@@ -306,8 +315,8 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   breach_order_buffer.clear();
   breach_order.close();
 
-  // We will write to dem in the loop below. So we mark it as not readonly anymore
-  dem.setReadonly(false);
+  // Reduce memory usage
+  elevations.save_all_tiles();
 
   cerr << "Applying breaching" << endl;
 
@@ -328,9 +337,9 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
       auto link = item.second;
       //auto link = cellInfo(cc).backlink;
       if (link != NO_BACK_LINK) {
-        auto elev = dem(cc);
+        auto elev = elevations2(cc);
         // Ensure the backlink's elevation is strictly lower than this cell's elevation
-        dem(link) = min(dem(link), std::nextafter(elev, std::numeric_limits<elev_t>::lowest()));
+        elevations2(link) = min(elevations2(link), std::nextafter(elev, std::numeric_limits<elev_t>::lowest()));
       }
     }
   }
@@ -338,6 +347,18 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   breach_order_read.close();
 
   cerr << "Wall-time = " << overall.stop() << endl;
+
+  // We will write to dem in the loop below. So we mark it as not readonly anymore
+  // This is the first time we actually write to the elevation
+  // Before this we can treat it as read-only
+  dem.cow("tmp/out/");
+
+  for (int y = 0; y < elevations.height(); y++) {
+    cout << "\rCopying to different tile size " << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
+    for (int x = 0;x < elevations.width(); x++) {
+      dem(x, y) = elevations2(x,y);
+    }
+  }
 }
 
 } // namespace richdem
@@ -356,7 +377,7 @@ int main(int argc, char** argv) {
   assert(string(argv[2]).find_last_of("/") != string::npos);
   assert(string(argv[2]).find("%f") != string::npos);
 
-  int cache_size = 16000;
+  int cache_size = 16000*4;
   cout << "Reading tile metadata..." << flush;
   A2Array2D<float> dem(argv[1], cache_size);
   cout << " done" << endl;

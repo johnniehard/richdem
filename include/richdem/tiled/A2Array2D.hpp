@@ -195,7 +195,7 @@ class A2Array2D {
   }
 
   void cow(std::string prefix) {
-    readonly = false;
+    setReadonly(false);
     cow_prefix = prefix;
     for(int32_t ty=0;ty<heightInTiles();ty++) {
       for(int32_t tx=0;tx<widthInTiles();tx++){
@@ -209,6 +209,7 @@ class A2Array2D {
     lru.setCapacity(cachesize);
     readonly = true;
 
+    int ntiles = 0;
     LayoutfileReader lf(layoutfile);
     while(lf.next()){
       if(lf.newRow()) //Add a row to the grid of chunks
@@ -241,6 +242,9 @@ class A2Array2D {
       cells_in_not_null_tiles += per_tile_width*per_tile_height;
 
       this_tile.basename = lf.getBasename();
+
+      ntiles++;
+      if ((ntiles % 1000) == 0) std::cout << "\rRead " << ntiles << std::flush;
     }
 
     quick_width_in_tiles  = widthInTiles();

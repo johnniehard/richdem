@@ -1,5 +1,6 @@
 #! /bin/bash
 
+export GDAL_DISABLE_READDIR_ON_OPEN=1
 INPUT_DEM=$1
 set -e
 
@@ -12,7 +13,7 @@ dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "tiler starting $dt" | tee -a runall_log.txt
 rm -rf out_tiler
 mkdir out_tiler
-~/Documents/flodesapp/richdem/programs/tiler/tiler.exe 64 64 $INPUT_DEM ./out_tiler/%n.tif
+~/Documents/flodesapp/richdem/programs/tiler/tiler.exe 256 256 $INPUT_DEM ./out_tiler/%n.tif
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "tiler done $dt" | tee -a runall_log.txt
 
@@ -25,6 +26,8 @@ mkdir out_breach
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "breach done $dt" | tee -a runall_log.txt
 
+rm -rf breach_order.binary ./tmp/*
+
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "flatres starting $dt" | tee -a runall_log.txt
 rm -rf out_flatres
@@ -36,6 +39,15 @@ dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "flatres done $dt" | tee -a runall_log.txt
 
 dt=$(date '+%d/%m/%Y %H:%M:%S')
+echo "accum starting $dt" | tee -a runall_log.txt
+rm -rf out_accum
+mkdir out_accum
+# mpirun -n 3 xterm -e lldb ~/Documents/flodesapp/richdem/programs/parallel_d8_accum/parallel_d8_accum.exe many @evict ./out_flatres/layout.layout ./out_accum/%n.tif
+mpirun -n 3 ~/Documents/flodesapp/richdem/programs/parallel_d8_accum/parallel_d8_accum.exe many @evict ./out_flatres/layout.layout ./out_accum/%n.tif
+dt=$(date '+%d/%m/%Y %H:%M:%S')
+echo "accum done $dt" | tee -a runall_log.txt
+
+dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "flow_length starting $dt" | tee -a runall_log.txt
 rm -rf out_flow_length
 mkdir out_flow_length
@@ -44,14 +56,5 @@ mkdir out_flow_length_tmp
 ~/Documents/flodesapp/richdem/programs/flow_length/flow_length.exe ./out_breach/layout.layout ./out_flow_length/%f.tif
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "flow_length done $dt" | tee -a runall_log.txt
-
-dt=$(date '+%d/%m/%Y %H:%M:%S')
-echo "accum starting $dt" | tee -a runall_log.txt
-rm -rf out_accum
-mkdir out_accum
-# mpirun -n 3 xterm -e lldb ~/Documents/flodesapp/richdem/programs/parallel_d8_accum/parallel_d8_accum.exe many @evict ./out_flatres/layout.layout ./out_accum/%n.tif
-mpirun -n 3 ~/Documents/flodesapp/richdem/programs/parallel_d8_accum/parallel_d8_accum.exe many @evict ./out_flatres/layout.layout ./out_accum/%n.tif
-dt=$(date '+%d/%m/%Y %H:%M:%S')
-echo "accum done $dt" | tee -a runall_log.txt
 
 echo "all done" | tee -a runall_log.txt
