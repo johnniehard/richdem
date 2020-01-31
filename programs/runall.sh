@@ -47,14 +47,14 @@ mpirun -n 3 ~/Documents/flodesapp/richdem/programs/parallel_d8_accum/parallel_d8
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "accum done $dt" | tee -a runall_log.txt
 
-dt=$(date '+%d/%m/%Y %H:%M:%S')
-echo "flow_length starting $dt" | tee -a runall_log.txt
-rm -rf out_flow_length
-mkdir out_flow_length
-rm -rf out_flow_length_tmp
-mkdir out_flow_length_tmp
-~/Documents/flodesapp/richdem/programs/flow_length/flow_length.exe ./out_breach/layout.layout ./out_flow_length/%f.tif
-dt=$(date '+%d/%m/%Y %H:%M:%S')
-echo "flow_length done $dt" | tee -a runall_log.txt
+# dt=$(date '+%d/%m/%Y %H:%M:%S')
+# echo "flow_length starting $dt" | tee -a runall_log.txt
+# rm -rf out_flow_length
+# mkdir out_flow_length
+# rm -rf out_flow_length_tmp
+# mkdir out_flow_length_tmp
+# ~/Documents/flodesapp/richdem/programs/flow_length/flow_length.exe ./out_breach/layout.layout ./out_flow_length/%f.tif
+# dt=$(date '+%d/%m/%Y %H:%M:%S')
+# echo "flow_length done $dt" | tee -a runall_log.txt
 
 echo "all done" | tee -a runall_log.txt
