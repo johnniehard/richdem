@@ -70,7 +70,7 @@ enum LindsayCellType { UNVISITED, VISITED, EDGE };
     tests.
 */
 
-const uint32_t NO_BACK_LINK = std::numeric_limits<uint32_t>::max();
+const int64_t NO_BACK_LINK = std::numeric_limits<int64_t>::max();
 
 template <class T>
 std::vector<T> read_backwards(std::istream &is, int64_t offset, int size) {
@@ -116,11 +116,13 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
   A2Array2D<float> elevations("tmp/elevations/", dem.stdTileWidth()/4, dem.stdTileHeight()/4, dem.widthInTiles()*4, dem.heightInTiles()*4, cache_size*4*4);
   A2Array2D<float> elevations2("tmp/elevations2/", dem.stdTileWidth()/4, dem.stdTileHeight()/4, dem.widthInTiles()*4, dem.heightInTiles()*4, cache_size*4*4);
+  assert(!elevations2.isReadonly());
+  assert(!elevations.isReadonly());
   
   for (int y = 0; y < elevations.height(); y++) {
     cout << "\rCopying to native (1 of 2) " << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
     for (int x = 0;x < elevations.width(); x++) {
-      auto elevation = dem(x,y);
+      float elevation = dem(x,y);
       elevations(x, y) = elevation;
     }
   }
@@ -137,8 +139,8 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   for (int y = 0; y < elevations.height(); y++) {
     cout << "\rCopying to native (2 of 2)" << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
     for (int x = 0;x < elevations.width(); x++) {
-      auto elevation = dem(x,y);
-      elevations2(x, y) = elevations(x, y) = elevation;
+      float elevation = elevations(x, y);
+      elevations2(x, y) = elevation;
 
       if (elevation >= 0 && elevation != noDataValue) {
         maxElevation = max(maxElevation, elevation);
@@ -153,9 +155,6 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   std::vector<uint32_t> flood_array;
   ProgressBar progress;
   Timer overall;
-
-  // Save memory and performance while running breaching
-  elevations2.setReadonly(true);
 
   overall.start();
 
@@ -176,7 +175,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
     //dem.print_cache_debug();
 
     for (int x = 0; x < dem.width(); x++) {
-      auto& elevation = elevations2(x, y);
+      auto elevation = elevations2(x, y);
 
       if (elevation == noDataValue) // Don't evaluate NoData cells
         continue;
@@ -200,7 +199,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
         // No need for an inGrid check here because edge cells are filtered above
 
-        auto nelev = elevations2(nx, ny);
+        float nelev = elevations2(nx, ny);
         // Cells which can drain into NoData go on priority-queue as edge cells
         if (nelev == noDataValue) {
           pqs[elevation2index(elevation, minElevation, maxElevation)].emplace(x, y, elevation, 0);
@@ -218,11 +217,14 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
       // makes the breaching/tunneling procedures work better.
       // TODO: Include?
       if (elevation < lowest_neighbour) {
-        if (eps_gradients)
+        if (eps_gradients) {
           elevation = std::nextafter(lowest_neighbour,
                                      std::numeric_limits<elev_t>::lowest());
-        else
+        } else {
           elevation = lowest_neighbour;
+        }
+
+        elevations2(x, y) = elevation;
       }
 
       // Since depressions might have flat bottoms, we treat flats as pits. Mark
@@ -236,6 +238,10 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
     }
   }
   cout << endl;
+
+
+  // Save memory and performance while running breaching
+  elevations2.setReadonly(true);
 
   // Since dem is read only right now, this will just discard the cache to let us save some memory
   // dem.save_all_tiles();
@@ -317,6 +323,8 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
   // Reduce memory usage
   elevations.save_all_tiles();
+  // We are going to write to elevations2 below. This means it must be read/write
+  elevations2.setReadonly(false);
 
   cerr << "Applying breaching" << endl;
 
@@ -337,7 +345,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
       auto link = item.second;
       //auto link = cellInfo(cc).backlink;
       if (link != NO_BACK_LINK) {
-        auto elev = elevations2(cc);
+        float elev = elevations2(cc);
         // Ensure the backlink's elevation is strictly lower than this cell's elevation
         elevations2(link) = min(elevations2(link), std::nextafter(elev, std::numeric_limits<elev_t>::lowest()));
       }

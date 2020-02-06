@@ -451,7 +451,15 @@ class A2Array2D {
     return data[ty][tx](x,y);
   }
 
+  T operator()(int32_t x, int32_t y) const {
+    return getPoint(x, y);
+  }
+
   T& operator()(int32_t x, int32_t y){
+    return getPoint(x, y);
+  }
+
+  T& getPoint(int32_t x, int32_t y) {
     assert(x>=0);
     assert(y>=0);
     assert(x<total_width_in_cells);
@@ -484,7 +492,14 @@ class A2Array2D {
     return data[tile_y][tile_x](x,y);
   }
 
+  T operator()(int64_t i) const {
+    int y = i / total_width_in_cells;
+    int x = i % total_width_in_cells;
+    return (*this)(x, y);
+  }
+
   T& operator()(int64_t i) {
+    assert(!readonly);
     int y = i / total_width_in_cells;
     int x = i % total_width_in_cells;
     return (*this)(x, y);
