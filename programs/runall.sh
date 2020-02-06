@@ -26,7 +26,7 @@ mkdir out_breach
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "breach done $dt" | tee -a runall_log.txt
 
-rm -rf /tmp/breach_order.binary ./tmp/*
+rm -rf /tmp/breach_order.binary tmp out_tiler 
 
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "flatres starting $dt" | tee -a runall_log.txt
@@ -37,6 +37,8 @@ mkdir out_flatres_tmp
 ~/Documents/flodesapp/richdem/programs/tiled_flat_resolution/parallel_flats.exe ./out_breach/layout.layout 20000 ./out_flatres_tmp/%f.tif ./out_flatres/%f.tif noflip
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "flatres done $dt" | tee -a runall_log.txt
+
+rm -rf out_flatres_tmp
 
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "accum starting $dt" | tee -a runall_log.txt
