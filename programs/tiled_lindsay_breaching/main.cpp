@@ -91,56 +91,28 @@ int elevation2index(elev_t elevation, elev_t minElevation, elev_t maxElevation) 
 }
 
 template <class elev_t>
-void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
-                 bool fill_depressions, uint32_t maxpathlen, elev_t maxdepth, int cache_size) {
-  cerr << "Starting" << endl;
-  assert(dem.isReadonly());
-
-  // Move cursor to top left of screen
-  std::cout << "\033[0;0;H";
-  // Clear screen
-  std::cout << "\033[0;J";
-
-  RDLOG_ALG_NAME << "Lindsay2016: Breach/Fill Depressions (EXPERIMENTAL!)";
-  RDLOG_CITATION
-      << "Lindsay, J.B., 2016. Efficient hybrid breaching-filling sink removal "
-         "methods for flow path enforcement in digital elevation models: "
-         "Efficient Hybrid Sink Removal Methods for Flow Path Enforcement. "
-         "Hydrological Processes 30, 846--857. doi:10.1002/hyp.10648";
-
-
-  mkdir("tmp", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-  mkdir("tmp/out", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-  mkdir("tmp/elevations", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-  mkdir("tmp/elevations2", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-
-  A2Array2D<float> elevations("tmp/elevations/", dem.stdTileWidth()/4, dem.stdTileHeight()/4, dem.widthInTiles()*4, dem.heightInTiles()*4, cache_size*4*4);
-  A2Array2D<float> elevations2("tmp/elevations2/", dem.stdTileWidth()/4, dem.stdTileHeight()/4, dem.widthInTiles()*4, dem.heightInTiles()*4, cache_size*4*4);
-  assert(!elevations2.isReadonly());
-  assert(!elevations.isReadonly());
-  
-  for (int y = 0; y < elevations.height(); y++) {
-    cout << "\rCopying to native (1 of 2) " << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
-    for (int x = 0;x < elevations.width(); x++) {
-      float elevation = dem(x,y);
-      elevations(x, y) = elevation;
+void copyArray(const A2Array2D<elev_t> &from, A2Array2D<elev_t> &to, const string& message) {
+  assert(!to.isReadonly());
+  for (int y = 0; y < to.height(); y++) {
+    cout << "\r" << message << " " << ((int)(100*y/(float)(to.height()))) << "%" << flush;
+    for (int x = 0;x < to.width(); x++) {
+      to(x, y) = from(x,y);
     }
   }
+}
 
-  // Clear memory usage
-  dem.save_all_tiles();
+template <class elev_t>
+pair<elev_t, elev_t> copyArrayAndDetermineHeight(const A2Array2D<elev_t> &from, A2Array2D<elev_t> &to, const string& message, elev_t noDataValue) {
+  assert(!to.isReadonly());
 
-  cerr << "Determining min and max elevation" << endl;
-
-  auto noDataValue = dem.noData();
   elev_t minElevation = 0;
   elev_t maxElevation = 0;
 
-  for (int y = 0; y < elevations.height(); y++) {
-    cout << "\rCopying to native (2 of 2)" << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
-    for (int x = 0;x < elevations.width(); x++) {
-      float elevation = elevations(x, y);
-      elevations2(x, y) = elevation;
+  for (int y = 0; y < from.height(); y++) {
+    cout << "\r" << message << " " << ((int)(100*y/(float)(from.height()))) << "%" << flush;
+    for (int x = 0;x < from.width(); x++) {
+      float elevation = from(x, y);
+      to(x, y) = elevation;
 
       if (elevation >= 0 && elevation != noDataValue) {
         maxElevation = max(maxElevation, elevation);
@@ -149,38 +121,26 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
     }
   }
   cout << endl;
+  return { minElevation, maxElevation };
+}
 
-  cout << "Done" << endl;
-
-  std::vector<uint32_t> flood_array;
-  ProgressBar progress;
-  Timer overall;
-
-  overall.start();
-
-  uint64_t total_pits = 0;
-
-  // Seed the priority queue
-
-  cout << "Elevation ranges: " << minElevation << "..." << maxElevation << endl; 
-
-  cerr << "Identifying pits and edge cells..." << endl;  
-
-  // List of priority queues. We use multiple ones to reduce the insertion/pop cost (which grows as O(log n))
-  vector<GridCellZkB_pq<elev_t>> pqs(elevation2index(maxElevation, minElevation, maxElevation) + 1);
+template <class elev_t>
+void addToQueues(A2Array2D<elev_t>& elevations, A2Array2D<elev_t>& elevations2, vector<GridCellZkB_pq<elev_t>>& pqs, elev_t minElevation, elev_t maxElevation, elev_t noDataValue, bool eps_gradients) {
+  assert(!elevations2.isReadonly());
+  assert(!elevations.isReadonly());
   uint64_t markedAsVisited = 0;
 
-  for (int y = 0; y < dem.height(); y++) {
-    cout << "\r" << (int)(100*(double)(y+1)/dem.height()) << "%" << flush;
-    //dem.print_cache_debug();
+  for (int y = 0; y < elevations.height(); y++) {
+    cout << "\r" << (int)(100*(double)(y+1)/elevations.height()) << "%" << flush;
+    //elevations.print_cache_debug();
 
-    for (int x = 0; x < dem.width(); x++) {
+    for (int x = 0; x < elevations.width(); x++) {
       auto elevation = elevations2(x, y);
 
       if (elevation == noDataValue) // Don't evaluate NoData cells
         continue;
 
-      if (dem.isEdgeCell(x, y)) { // Valid edge cells go on priority-queue
+      if (elevations.isEdgeCell(x, y)) { // Valid edge cells go on priority-queue
         pqs[elevation2index(elevation, minElevation, maxElevation)].emplace(x, y, elevation, 0);
         // Note: it is important to use elevations instead of dem here
         // They are identical in the beginning, but we will modify elevations while dem
@@ -227,34 +187,16 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
         elevations2(x, y) = elevation;
       }
 
-      // Since depressions might have flat bottoms, we treat flats as pits. Mark
-      // flat/pits as such now.
-      if (elevation <= lowest_neighbour) {
-        //cellInfo(x, y).pit = true;
-        total_pits++; // TODO: May not need this
-      }
-
     nextcell:;
     }
   }
   cout << endl;
+}
 
-
-  // Save memory and performance while running breaching
-  elevations2.setReadonly(true);
-
-  // Since dem is read only right now, this will just discard the cache to let us save some memory
-  // dem.save_all_tiles();
-
-  // Mark as readonly to save IO bandwidth
-  //dem.save_all_tiles();
-  assert(dem.isReadonly());
-
-  // The Priority-Flood operation assures that we reach pit cells by passing
-  // into depressions over the outlet of minimal elevation on their edge.
-  cerr << "Breaching..." << endl;
+template<class elev_t>
+uint64_t breach(A2Array2D<elev_t>& elevations, vector<GridCellZkB_pq<elev_t>>& pqs, elev_t minElevation, elev_t maxElevation, elev_t noDataValue) {
+  assert(!elevations.isReadonly());
   uint64_t done = 0;
-
   std::fstream breach_order;
   breach_order.open("/tmp/breach_order.binary", std::fstream::out | std::fstream::binary);
   
@@ -266,14 +208,14 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
       done++;
       if ((done % (1024*128)) == 0){
-        cout << "\r" << (int)(( done / (double)((int64_t)dem.width()*dem.height())) * 100) << "%. Loops done:" << done << " pq index " << pq_index << "/" << pqs.size() << " pq size: " << pq.size() << " " << markedAsVisited << "/" << ((int64_t)dem.width()*dem.height()) << flush;
+        cout << "\r" << (int)(( done / (double)((int64_t)elevations.width()*elevations.height())) * 100) << "%. Loops done:" << done << " pq index " << pq_index << "/" << pqs.size() << " pq size: " << pq.size() << "/" << ((int64_t)elevations.width()*elevations.height()) << flush;
       }
       
       const auto c = pq.top();
-      int64_t cc = dem.xyToI(c.x, c.y); // Current cell on the path
+      int64_t cc = elevations.xyToI(c.x, c.y); // Current cell on the path
       pq.pop();
       
-      int64_t backlink = c.backlink_dir == 0 ? NO_BACK_LINK : dem.xyToI(c.x + dx[c.backlink_dir], c.y + dy[c.backlink_dir]);
+      int64_t backlink = c.backlink_dir == 0 ? NO_BACK_LINK : elevations.xyToI(c.x + dx[c.backlink_dir], c.y + dy[c.backlink_dir]);
       breach_order_buffer.push_back({cc, backlink});
       if (breach_order_buffer.size() >= 1024*1024) {
         breach_order.write(reinterpret_cast<const char*>(breach_order_buffer.data()),breach_order_buffer.size() * sizeof(pair<int64_t, int64_t>));
@@ -285,7 +227,7 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
         const int nx = c.x + dx[n];
         const int ny = c.y + dy[n];
 
-        if (!dem.inGrid(nx, ny))
+        if (!elevations.inGrid(nx, ny))
           continue;
 
         auto& elevation = elevations(nx, ny);
@@ -303,8 +245,6 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
 
         // Instead of marking the cell as visited, we just set the elevation to an invalid value
         elevation = noDataValue;
-
-        markedAsVisited++;
       }
     }
 
@@ -320,18 +260,15 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   breach_order.write(reinterpret_cast<const char*>(breach_order_buffer.data()),breach_order_buffer.size() * sizeof(pair<int64_t, int64_t>));
   breach_order_buffer.clear();
   breach_order.close();
+  return done;
+}
 
-  // Reduce memory usage
-  elevations.save_all_tiles();
-  // We are going to write to elevations2 below. This means it must be read/write
-  elevations2.setReadonly(false);
-
-  cerr << "Applying breaching" << endl;
-
+template<class elev_t>
+void applyBreaching(A2Array2D<elev_t>& elevations2, uint64_t totalCells) {
+  assert(!elevations2.isReadonly());
   auto breach_order_read = ifstream("/tmp/breach_order.binary");
   breach_order_read.seekg(0, std::ios::end);
-  uint64_t totalCells = done;
-  done = 0;
+  uint64_t done = 0;
   while(done < totalCells) {
     uint64_t remaining = totalCells - done;
     uint64_t toRead = min(remaining, 1024 * (uint64_t)1024);
@@ -343,7 +280,6 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
     for (auto item : items) {
       auto cc = item.first;
       auto link = item.second;
-      //auto link = cellInfo(cc).backlink;
       if (link != NO_BACK_LINK) {
         float elev = elevations2(cc);
         // Ensure the backlink's elevation is strictly lower than this cell's elevation
@@ -353,20 +289,82 @@ void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
   }
 
   breach_order_read.close();
+}
+
+template <class elev_t>
+void Lindsay2016(A2Array2D<elev_t> &dem, int mode, bool eps_gradients,
+                 bool fill_depressions, uint32_t maxpathlen, elev_t maxdepth, int cache_size) {
+  cerr << "Starting" << endl;
+  assert(dem.isReadonly());
+  
+  // Move cursor to top left of screen
+  std::cout << "\033[1;1;H";
+  // Clear screen
+  std::cout << "\033[0;J";
+
+  RDLOG_ALG_NAME << "Lindsay2016: Breach/Fill Depressions (EXPERIMENTAL!)";
+  RDLOG_CITATION
+      << "Lindsay, J.B., 2016. Efficient hybrid breaching-filling sink removal "
+         "methods for flow path enforcement in digital elevation models: "
+         "Efficient Hybrid Sink Removal Methods for Flow Path Enforcement. "
+         "Hydrological Processes 30, 846--857. doi:10.1002/hyp.10648";
+
+
+  mkdir("tmp", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  mkdir("tmp/out", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  mkdir("tmp/elevations", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  mkdir("tmp/elevations2", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+
+  A2Array2D<float> elevations("tmp/elevations/", dem.stdTileWidth()/4, dem.stdTileHeight()/4, dem.widthInTiles()*4, dem.heightInTiles()*4, cache_size*4*4);
+  A2Array2D<float> elevations2("tmp/elevations2/", dem.stdTileWidth()/4, dem.stdTileHeight()/4, dem.widthInTiles()*4, dem.heightInTiles()*4, cache_size*4*4);
+  assert(!elevations2.isReadonly());
+  assert(!elevations.isReadonly());
+
+  copyArray(dem, elevations, "Copying to native (1 of 2)");
+
+  // Clear memory usage
+  dem.save_all_tiles();
+
+  auto noDataValue = dem.noData();
+
+  elev_t minElevation, maxElevation;
+  tie(minElevation, maxElevation) = copyArrayAndDetermineHeight(elevations, elevations2, "Copying to native (2 of 2)", noDataValue);
+
+  Timer overall;
+  overall.start();
+
+  cout << "Elevation ranges: " << minElevation << "..." << maxElevation << endl; 
+  cerr << "Identifying pits and edge cells..." << endl;  
+
+  // List of priority queues. We use multiple ones to reduce the insertion/pop cost (which grows as O(log n))
+  vector<GridCellZkB_pq<elev_t>> pqs(elevation2index(maxElevation, minElevation, maxElevation) + 1);
+  addToQueues(elevations, elevations2, pqs, minElevation, maxElevation, noDataValue, eps_gradients);
+
+  // Save memory and performance while running breaching
+  elevations2.setReadonly(true);
+
+  // The Priority-Flood operation assures that we reach pit cells by passing
+  // into depressions over the outlet of minimal elevation on their edge.
+  cerr << "Breaching..." << endl;
+  uint64_t done = breach(elevations, pqs, minElevation, maxElevation, noDataValue);
+
+  // Reduce memory usage
+  elevations.save_all_tiles();
+  // We are going to write to elevations2 below. This means it must be read/write
+  elevations2.setReadonly(false);
+
+  cerr << "Applying breaching" << endl;
+
+  applyBreaching(elevations2, done);
 
   cerr << "Wall-time = " << overall.stop() << endl;
 
-  // We will write to dem in the loop below. So we mark it as not readonly anymore
+  // We will write to dem in the function below. So we mark it as not readonly anymore
   // This is the first time we actually write to the elevation
   // Before this we can treat it as read-only
   dem.cow("tmp/out/");
 
-  for (int y = 0; y < elevations.height(); y++) {
-    cout << "\rCopying to different tile size " << ((int)(100*y/(float)(elevations.height()))) << "%" << flush;
-    for (int x = 0;x < elevations.width(); x++) {
-      dem(x, y) = elevations2(x,y);
-    }
-  }
+  copyArray(elevations2, dem, "Copying to larger tile size");
 }
 
 } // namespace richdem

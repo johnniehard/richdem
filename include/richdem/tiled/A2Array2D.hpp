@@ -87,10 +87,10 @@ class A2Array2D {
       }
     }
   };
-  std::vector< std::vector< WrappedArray2D > > data;
+  mutable std::vector< std::vector< WrappedArray2D > > data;
   std::string cow_prefix;
 
-  LRU< WrappedArray2D* > lru;
+  mutable LRU< WrappedArray2D* > lru;
 
   int32_t not_null_tiles          = 0;
   int64_t total_width_in_cells    = 0;
@@ -99,13 +99,13 @@ class A2Array2D {
   int32_t per_tile_height         = 0;
   int32_t per_tile_width_log2     = 0;
   int32_t per_tile_height_log2     = 0;
-  int32_t evictions               = 0;
+  mutable int32_t evictions               = 0;
   int64_t cells_in_not_null_tiles = 0;
-  T       no_data_to_set; //Used to disguise null tiles
+  mutable T       no_data_to_set; //Used to disguise null tiles
 
   bool readonly = true;
 
-  void _LoadTile(int tile_x, int tile_y){
+  void _LoadTile(int tile_x, int tile_y) const {
     if(isNullTile(tile_x,tile_y))
       return;
 
@@ -167,7 +167,7 @@ class A2Array2D {
     this->readonly = readonly;
   }
 
-  void pop_from_lru() {
+  void pop_from_lru() const {
     auto tile_to_unload = lru.back();
 
     if(readonly)
@@ -452,7 +452,36 @@ class A2Array2D {
   }
 
   T operator()(int32_t x, int32_t y) const {
-    return getPoint(x, y);
+    assert(x>=0);
+    assert(y>=0);
+    assert(x<total_width_in_cells);
+    assert(y<total_height_in_cells);
+
+    // Use bit twiddling tricks instead of slow divisions and modulo
+    // We can do this since we check in the constructor that per_tile_width and height are powers of two.
+    // int32_t tile_x = x/per_tile_width;
+    // int32_t tile_y = y/per_tile_height;
+    // x              = x%per_tile_width;
+    // y              = y%per_tile_height;
+    int32_t tile_x = x >> per_tile_width_log2;
+    int32_t tile_y = y >> per_tile_height_log2;
+    x = x & (per_tile_width - 1);
+    y = y & (per_tile_height - 1);
+
+    // Fast path
+    if (data[tile_y][tile_x].loaded) {
+      lru.insert(&data[tile_y][tile_x]);
+      return data[tile_y][tile_x](x,y);
+    }
+
+    if(isNullTile(tile_x,tile_y)){
+      no_data_to_set = data[tile_y][tile_x].noData();
+      return no_data_to_set;
+    }
+
+    _LoadTile(tile_x, tile_y);
+
+    return data[tile_y][tile_x](x,y);
   }
 
   T& operator()(int32_t x, int32_t y){
@@ -505,11 +534,11 @@ class A2Array2D {
     return (*this)(x, y);
   }
 
-  int64_t xyToI(int32_t x, int32_t y) {
+  int64_t xyToI(int32_t x, int32_t y) const {
     return (int64_t)y * total_width_in_cells + (int64_t)x;
   }
 
-  bool inGrid(int32_t x, int32_t y) {
+  bool inGrid(int32_t x, int32_t y) const {
     return in_grid(x, y);
   }
 
