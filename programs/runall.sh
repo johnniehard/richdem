@@ -26,7 +26,7 @@ mkdir out_breach
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "breach done $dt" | tee -a runall_log.txt
 
-rm -rf /tmp/breach_order.binary tmp out_tiler 
+rm -rf /tmp/breach_order.binary tmp
 
 dt=$(date '+%d/%m/%Y %H:%M:%S')
 echo "flatres starting $dt" | tee -a runall_log.txt
